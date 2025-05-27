@@ -179,8 +179,7 @@ struct ParentDashboardView: View {
                 Button("See All") {
                     selectedTab = 1
                 }
-                .font(DesignSystem.Typography.callout)
-                .foregroundColor(DesignSystem.Colors.primaryBlue)
+                .buttonStyle(TextButtonStyle(color: DesignSystem.Colors.primaryBlue))
             }
             
             ScrollView(.horizontal, showsIndicators: false) {
@@ -275,18 +274,18 @@ struct ParentDashboardView: View {
                         Spacer()
                         Button(action: { showAddChild = true }) {
                             Image(systemName: "plus")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(width: 56, height: 56)
-                                .background(DesignSystem.Colors.primaryBlue)
-                                .clipShape(Circle())
-                                .shadow(
-                                    color: DesignSystem.Shadow.large.color,
-                                    radius: DesignSystem.Shadow.large.radius,
-                                    x: DesignSystem.Shadow.large.x,
-                                    y: DesignSystem.Shadow.large.y
-                                )
                         }
+                        .buttonStyle(IconButtonStyle(
+                            size: 56,
+                            backgroundColor: DesignSystem.Colors.primaryBlue,
+                            foregroundColor: .white
+                        ))
+                        .shadow(
+                            color: DesignSystem.Shadow.large.color,
+                            radius: DesignSystem.Shadow.large.radius,
+                            x: DesignSystem.Shadow.large.x,
+                            y: DesignSystem.Shadow.large.y
+                        )
                         .padding(.trailing, DesignSystem.Spacing.large)
                         .padding(.bottom, DesignSystem.Spacing.large)
                     }
@@ -313,9 +312,9 @@ struct ParentDashboardView: View {
             
             Button(action: { showAddChild = true }) {
                 Text("Add First Child")
-                    .frame(maxWidth: 200)
             }
             .buttonStyle(PrimaryButtonStyle(isEnabled: true))
+            .frame(maxWidth: 200)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DesignSystem.Spacing.xxxLarge)
@@ -588,14 +587,13 @@ struct AddChildView: View {
                                 Text("Link Account")
                             }
                         }
-                        .frame(maxWidth: .infinity)
-                        .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading && !childEmail.isEmpty))
+                        .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading && !childEmail.isEmpty, isLoading: isLoading))
                         .disabled(isLoading || childEmail.isEmpty)
                         
                         Button("Cancel") {
                             dismiss()
                         }
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                        .buttonStyle(TextButtonStyle(color: DesignSystem.Colors.secondaryText))
                     }
                     .padding(.horizontal, DesignSystem.Spacing.large)
                     .padding(.bottom, DesignSystem.Spacing.large)

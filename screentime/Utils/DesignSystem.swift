@@ -87,8 +87,11 @@ enum DesignSystem {
         static let cardPadding: CGFloat = 20
         static let sectionSpacing: CGFloat = 32
         static let listItemSpacing: CGFloat = 16
-        static let buttonPadding: CGFloat = 16
+        static let buttonPadding: CGFloat = 20  // Increased from 16
+        static let buttonHorizontalPadding: CGFloat = 28  // New: Generous horizontal padding
+        static let buttonVerticalPadding: CGFloat = 16    // New: Comfortable vertical padding
         static let iconSpacing: CGFloat = 12
+        static let buttonIconSpacing: CGFloat = 10  // New: Space between icon and text in buttons
     }
     
     // MARK: - Corner Radius - More refined curves
@@ -156,11 +159,13 @@ enum DesignSystem {
     // MARK: - Layout - Better proportions
     enum Layout {
         static let maxContentWidth: CGFloat = 428
-        static let minButtonHeight: CGFloat = 52  // Increased for better touch target
+        static let minButtonHeight: CGFloat = 56  // Increased from 52 for better touch target
+        static let minCompactButtonHeight: CGFloat = 44  // New: For smaller buttons
         static let minTouchTarget: CGFloat = 48
         static let keyboardOffset: CGFloat = 20
         static let circleTimerSize: CGFloat = 280  // Optimized for timer display
         static let iconSize: CGFloat = 24
+        static let buttonIconSize: CGFloat = 20  // New: Standard icon size for buttons
         static let tabBarHeight: CGFloat = 88
     }
     
@@ -233,8 +238,10 @@ extension View {
         self
             .font(DesignSystem.Typography.bodyBold)
             .foregroundColor(.white)
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: DesignSystem.Layout.minButtonHeight)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
             .background(DesignSystem.Colors.primaryBlue)
             .cornerRadius(DesignSystem.CornerRadius.button)
     }
@@ -243,8 +250,10 @@ extension View {
         self
             .font(DesignSystem.Typography.bodyBold)
             .foregroundColor(DesignSystem.Colors.primaryBlue)
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: DesignSystem.Layout.minButtonHeight)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
             .background(DesignSystem.Colors.primaryBlue.opacity(0.1))
             .cornerRadius(DesignSystem.CornerRadius.button)
     }
@@ -340,6 +349,105 @@ struct ScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1.0)
+            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
+    }
+}
+
+// MARK: - Enhanced Button Styles
+struct PrimaryButtonStyle: ButtonStyle {
+    var isEnabled: Bool = true
+    var isLoading: Bool = false
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.bodyBold)
+            .foregroundColor(.white)
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
+                    .fill(isEnabled ? DesignSystem.Colors.primaryBlue : DesignSystem.Colors.primaryBlue.opacity(0.5))
+            )
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.97 : 1.0)
+            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
+            .opacity(isLoading ? 0.8 : 1.0)
+    }
+}
+
+struct SecondaryButtonStyle: ButtonStyle {
+    var isEnabled: Bool = true
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.bodyBold)
+            .foregroundColor(isEnabled ? DesignSystem.Colors.primaryBlue : DesignSystem.Colors.primaryBlue.opacity(0.5))
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
+            .frame(maxWidth: .infinity)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
+                    .fill(DesignSystem.Colors.primaryBlue.opacity(isEnabled ? 0.1 : 0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
+                    .stroke(DesignSystem.Colors.primaryBlue.opacity(isEnabled ? 0.3 : 0.1), lineWidth: 1)
+            )
+            .scaleEffect(configuration.isPressed && isEnabled ? 0.97 : 1.0)
+            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
+    }
+}
+
+struct CompactButtonStyle: ButtonStyle {
+    var color: Color = DesignSystem.Colors.primaryBlue
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.calloutBold)
+            .foregroundColor(color)
+            .padding(.horizontal, DesignSystem.Spacing.medium)
+            .padding(.vertical, DesignSystem.Spacing.small)
+            .frame(minHeight: DesignSystem.Layout.minCompactButtonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                    .fill(color.opacity(0.1))
+            )
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
+    }
+}
+
+struct IconButtonStyle: ButtonStyle {
+    var size: CGFloat = 44
+    var backgroundColor: Color = DesignSystem.Colors.primaryBlue
+    var foregroundColor: Color = .white
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: DesignSystem.Layout.buttonIconSize, weight: .medium))
+            .foregroundColor(foregroundColor)
+            .frame(width: size, height: size)
+            .background(
+                Circle()
+                    .fill(backgroundColor)
+            )
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
+    }
+}
+
+struct TextButtonStyle: ButtonStyle {
+    var color: Color = DesignSystem.Colors.primaryBlue
+    
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(DesignSystem.Typography.callout)
+            .foregroundColor(color)
+            .padding(.horizontal, DesignSystem.Spacing.small)
+            .padding(.vertical, DesignSystem.Spacing.xSmall)
+            .opacity(configuration.isPressed ? 0.7 : 1.0)
             .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
     }
 } 

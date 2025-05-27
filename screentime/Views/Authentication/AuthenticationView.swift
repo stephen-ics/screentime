@@ -222,7 +222,7 @@ struct AuthenticationView: View {
         VStack(spacing: DesignSystem.Spacing.medium) {
             // Primary Action
             Button(action: handleAuthentication) {
-                HStack {
+                HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
                     if isLoading {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
@@ -231,10 +231,8 @@ struct AuthenticationView: View {
                         Text(isSignUp ? "Create Account" : "Sign In")
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: DesignSystem.Layout.minButtonHeight)
             }
-            .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading))
+            .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading, isLoading: isLoading))
             .disabled(isLoading)
             
             // Divider
@@ -301,8 +299,8 @@ struct AuthenticationView: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
             }
-            .font(DesignSystem.Typography.callout)
         }
+        .buttonStyle(TextButtonStyle(color: .white))
     }
     
     // MARK: - Actions
@@ -395,22 +393,6 @@ struct CustomSecureField: View {
     }
 }
 
-struct PrimaryButtonStyle: ButtonStyle {
-    let isEnabled: Bool
-    
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(DesignSystem.Typography.bodyBold)
-            .foregroundColor(.white)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                    .fill(isEnabled ? DesignSystem.Colors.primaryBlue : DesignSystem.Colors.primaryBlue.opacity(0.6))
-            )
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(DesignSystem.Animation.quick, value: configuration.isPressed)
-    }
-}
-
 struct SocialSignInButton: View {
     let title: String
     var icon: String? = nil
@@ -421,29 +403,34 @@ struct SocialSignInButton: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: DesignSystem.Spacing.small) {
+            HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
                 if let icon = icon {
                     Image(systemName: icon)
-                        .font(.system(size: 18))
+                        .font(.system(size: DesignSystem.Layout.buttonIconSize))
                 } else if let imageName = imageName {
                     Image(imageName)
                         .resizable()
-                        .frame(width: 18, height: 18)
+                        .frame(width: DesignSystem.Layout.buttonIconSize, height: DesignSystem.Layout.buttonIconSize)
                 }
                 
                 Text(title)
-                    .font(DesignSystem.Typography.callout)
+                    .font(DesignSystem.Typography.bodyBold)
             }
             .foregroundColor(foregroundColor)
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: DesignSystem.Layout.minButtonHeight)
-            .background(backgroundColor)
-            .cornerRadius(DesignSystem.CornerRadius.button)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
+                    .fill(backgroundColor)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                    .stroke(DesignSystem.Colors.separator, lineWidth: 0.5)
+                    .stroke(backgroundColor == .black ? Color.clear : DesignSystem.Colors.separator, lineWidth: 1)
             )
         }
+        .buttonStyle(ScaleButtonStyle())
     }
 }
 

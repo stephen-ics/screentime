@@ -237,17 +237,21 @@ struct ChildDashboardView: View {
     // MARK: - Request Time Button
     private var requestTimeButton: some View {
         Button(action: { showRequestTime = true }) {
-            HStack(spacing: DesignSystem.Spacing.small) {
+            HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: DesignSystem.Layout.buttonIconSize, weight: .medium))
                 Text("Request More Time")
                     .font(DesignSystem.Typography.bodyBold)
             }
             .foregroundColor(DesignSystem.Colors.childAccent)
+            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
+            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
             .frame(maxWidth: .infinity)
-            .frame(height: DesignSystem.Layout.minButtonHeight)
-            .background(Color.white)
-            .cornerRadius(DesignSystem.CornerRadius.button)
+            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
+                    .fill(Color.white)
+            )
             .shadow(
                 color: DesignSystem.Shadow.medium.color,
                 radius: DesignSystem.Shadow.medium.radius,
@@ -576,15 +580,14 @@ struct RequestTimeView: View {
                                 }
                             }) {
                                 Text("\(time)m")
-                                    .font(DesignSystem.Typography.calloutBold)
-                                    .foregroundColor(minutes == time ? .white : DesignSystem.Colors.primaryText)
-                                    .frame(width: 75, height: 48)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                                            .fill(minutes == time ? DesignSystem.Colors.childAccent : DesignSystem.Colors.tertiaryBackground)
-                                    )
                             }
-                            .buttonStyle(ScaleButtonStyle(scale: 0.95))
+                            .buttonStyle(CompactButtonStyle(
+                                color: minutes == time ? .white : DesignSystem.Colors.primaryText
+                            ))
+                            .background(
+                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
+                                    .fill(minutes == time ? DesignSystem.Colors.childAccent : Color.clear)
+                            )
                         }
                     }
                     
@@ -635,15 +638,13 @@ struct RequestTimeView: View {
                         dismiss()
                     }) {
                         Text("Send Request")
-                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(PrimaryButtonStyle(isEnabled: true))
                     
                     Button("Cancel") {
                         dismiss()
                     }
-                    .font(DesignSystem.Typography.callout)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                    .buttonStyle(TextButtonStyle(color: DesignSystem.Colors.secondaryText))
                 }
                 .padding(.horizontal, DesignSystem.Spacing.large)
                 .padding(.bottom, DesignSystem.Spacing.xLarge)
