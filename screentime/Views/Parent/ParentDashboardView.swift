@@ -1,317 +1,524 @@
 import SwiftUI
+import Combine
+import _Concurrency
 
+/// Main parent dashboard view with proper MVVM architecture and dependency injection
 struct ParentDashboardView: View {
-    // MARK: - Environment
-    @EnvironmentObject private var authService: AuthenticationService
-    @Environment(\.managedObjectContext) private var viewContext
+    
+    // MARK: - Dependencies
+    private let userService: any UserServiceProtocol
+    private let dataRepository: DataRepositoryProtocol
     
     // MARK: - State
-    @State private var linkedChildren: [User] = []
-    @State private var pendingRequestsCount = 0
-    @State private var selectedTab = 0
-    @State private var showAddChild = false
-    @State private var showAddTask = false
-    @State private var showSettings = false
-    @State private var showTimeRequests = false
+    @StateObject private var router = AppRouter()
+    @StateObject private var viewModel: ParentDashboardViewModel
+    
+    // MARK: - Environment
+    @Environment(\.managedObjectContext) private var viewContext
+    
+    // MARK: - Initialization
+    
+    init(
+        userService: any UserServiceProtocol = UserService.shared,
+        dataRepository: DataRepositoryProtocol = DataRepository.shared
+    ) {
+        self.userService = userService
+        self.dataRepository = dataRepository
+        
+        // Create router and view model
+        let tempRouter = AppRouter()
+        self._router = StateObject(wrappedValue: tempRouter)
+        self._viewModel = StateObject(wrappedValue: ParentDashboardViewModel(
+            userService: userService,
+            dataRepository: dataRepository,
+            router: tempRouter
+        ))
+    }
     
     // MARK: - Body
+    
     var body: some View {
-        TabView(selection: $selectedTab) {
-            // Dashboard Tab
-            NavigationView {
-                dashboardTab
-            }
-            .tabItem {
-                Label("Dashboard", systemImage: "square.grid.2x2")
-            }
-            .tag(0)
-            
-            // Children Tab
-            NavigationView {
-                childrenTab
-            }
-            .tabItem {
-                Label("Children", systemImage: "person.2")
-            }
-            .tag(1)
-            
-            // Tasks Tab
-            NavigationView {
-                TaskListView()
-                    .navigationTitle("Tasks")
-                    .navigationBarItems(trailing: addTaskButton)
-            }
-            .tabItem {
-                Label("Tasks", systemImage: "checklist")
-            }
-            .tag(2)
-            
-            // Account Tab
-            AccountView()
-                .environmentObject(authService)
-                .tabItem {
-                    Label("Account", systemImage: "person.circle")
+        NavigationStack(path: $router.path) {
+            DashboardTabView(viewModel: viewModel)
+                .navigationDestination(for: NavigationDestination.self) { destination in
+                    destinationView(for: destination)
                 }
-                .tag(3)
         }
-        .sheet(isPresented: $showAddChild) {
-            AddChildView()
-                .environmentObject(authService)
-        }
-        .sheet(isPresented: $showAddTask) {
-            AddTaskView()
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
-        .sheet(isPresented: $showTimeRequests) {
-            NavigationView {
-                TimeRequestsView()
-                    .environmentObject(authService)
-            }
-        }
+        .environmentObject(router)
         .onAppear {
-            loadLinkedChildren()
-            updatePendingRequestsCount()
-        }
-        .onReceive(authService.objectWillChange) { _ in
-            loadLinkedChildren()
-            updatePendingRequestsCount()
+            viewModel.loadData()
         }
     }
     
-    // MARK: - Dashboard Tab
-    private var dashboardTab: some View {
+    @ViewBuilder
+    private func destinationView(for destination: NavigationDestination) -> some View {
+        switch destination {
+        case .childDetail(let user):
+            Text("Child Detail for \(user.name)")
+                .navigationTitle(user.name)
+        case .taskDetail(_):
+            Text("Task Detail")
+                .navigationTitle("Task")
+        case .settings:
+            SettingsView()
+        case .editProfile:
+            Text("Edit Profile - Coming Soon")
+                .navigationTitle("Edit Profile")
+        case .timeRequestDetail(_):
+            Text("Time Request Detail")
+                .navigationTitle("Request")
+        case .reports:
+            ReportsView()
+        }
+    }
+}
+
+// Alternative initialization approach
+struct ParentDashboardView_Alternative: View {
+    
+    // MARK: - Dependencies
+    private let userService: any UserServiceProtocol
+    private let dataRepository: DataRepositoryProtocol
+    
+    // MARK: - State
+    @StateObject private var router = AppRouter()
+    
+    // MARK: - Initialization
+    
+    init(
+        userService: any UserServiceProtocol = UserService.shared,
+        dataRepository: DataRepositoryProtocol = DataRepository.shared
+    ) {
+        self.userService = userService
+        self.dataRepository = dataRepository
+    }
+    
+    // MARK: - Body
+    
+    var body: some View {
+        DashboardContainer(
+            userService: userService,
+            dataRepository: dataRepository,
+            router: router
+        )
+        .environmentObject(router)
+    }
+}
+
+// MARK: - Dashboard Container
+
+/// Container view that creates the view model with proper router reference
+struct DashboardContainer: View {
+    let userService: any UserServiceProtocol
+    let dataRepository: DataRepositoryProtocol
+    let router: AppRouter
+    
+    var body: some View {
+        DashboardTabView(
+            viewModel: ParentDashboardViewModel(
+                userService: userService,
+                dataRepository: dataRepository,
+                router: router
+            )
+        )
+        .onAppear {
+            // Load data when the view appears
+        }
+    }
+}
+
+// MARK: - Dashboard Tab View
+
+/// Tab view coordinator that manages navigation between different dashboard sections
+struct DashboardTabView: View {
+    
+    // MARK: - Properties
+    @ObservedObject var viewModel: ParentDashboardViewModel
+    @EnvironmentObject private var router: AppRouter
+    
+    // MARK: - Body
+    
+    var body: some View {
+        TabView(selection: Binding(
+            get: { viewModel.state.selectedTab },
+            set: { viewModel.selectTab($0) }
+        )) {
+            ForEach(DashboardTab.allCases, id: \.self) { tab in
+                tabContent(for: tab)
+                    .tabItem { tabItem(for: tab) }
+                    .tag(tab)
+            }
+        }
+        .sheet(item: $router.presentedSheet) { destination in
+            sheetContent(for: destination)
+                .environmentObject(router)
+        }
+        .fullScreenCover(item: $router.presentedFullScreen) { destination in
+            fullScreenContent(for: destination)
+                .environmentObject(router)
+        }
+        .onAppear {
+            viewModel.loadData()
+        }
+    }
+    
+    // MARK: - Tab Content
+    
+    @ViewBuilder
+    private func tabContent(for tab: DashboardTab) -> some View {
+        switch tab {
+        case .dashboard:
+            DashboardContentView(viewModel: viewModel)
+                .navigationBarHidden(true)
+            
+        case .children:
+            ChildrenListView(viewModel: viewModel)
+                .navigationTitle("Children")
+            
+        case .tasks:
+            TaskListView()
+                .navigationTitle("Tasks")
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        addTaskButton
+                    }
+                }
+            
+        case .account:
+            AccountView()
+                .navigationTitle("Account")
+        }
+    }
+    
+    @ViewBuilder
+    private func tabItem(for tab: DashboardTab) -> some View {
+        Label(tab.title, systemImage: tab.icon)
+    }
+    
+    // MARK: - Sheet Content
+    
+    @ViewBuilder
+    private func sheetContent(for destination: SheetDestination) -> some View {
+        switch destination {
+        case .addChild:
+            NavigationView {
+                ModernAddChildView()
+                    .environmentObject(router)
+            }
+            
+        case .addTask:
+            NavigationView {
+                AddTaskView()
+                    .environmentObject(router)
+            }
+            
+        case .timeRequests:
+            NavigationView {
+                TimeRequestsView()
+                    .environmentObject(router)
+            }
+            
+        case .settings:
+            NavigationView {
+                SettingsView()
+                    .environmentObject(router)
+            }
+            
+        case .editProfile:
+            NavigationView {
+                EditProfileView()
+                    .environmentObject(router)
+            }
+            
+        case .changePassword:
+            NavigationView {
+                ChangePasswordView()
+                    .environmentObject(router)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func fullScreenContent(for destination: FullScreenDestination) -> some View {
+        switch destination {
+        case .authentication:
+            AuthenticationView()
+                .environmentObject(router)
+            
+        case .onboarding:
+            Text("Onboarding - Coming Soon")
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+            
+        case .parentalControls:
+            Text("Parental Controls - Coming Soon")
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+        }
+    }
+    
+    // MARK: - Helper Views
+    
+    @ViewBuilder
+    private var addTaskButton: some View {
+        Button(action: { router.presentSheet(.addTask) }) {
+            Image(systemName: "plus")
+        }
+    }
+}
+
+// MARK: - Children List View
+
+/// Optimized children list view with proper state management
+struct ChildrenListView: View {
+    
+    // MARK: - Properties
+    @ObservedObject var viewModel: ParentDashboardViewModel
+    @EnvironmentObject private var router: AppRouter
+    
+    // MARK: - Body
+    
+    var body: some View {
         ZStack {
             DesignSystem.Colors.groupedBackground
                 .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: DesignSystem.Spacing.xLarge) {
-                    // Header
-                    dashboardHeader
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-                        .padding(.top, DesignSystem.Spacing.large)
-                    
-                    // Quick Actions
-                    quickActionsSection
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-                    
-                    // Children Overview
-                    if !linkedChildren.isEmpty {
-                        childrenOverviewSection
-                            .padding(.horizontal, DesignSystem.Spacing.large)
-                    }
-                    
-                    // Recent Activity
-                    recentActivitySection
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-                        .padding(.bottom, DesignSystem.Spacing.xxLarge)
+            if viewModel.state.isLoadingChildren {
+                loadingState
+            } else if viewModel.state.linkedChildren.isEmpty {
+                emptyState
+            } else {
+                childrenList
+            }
+        }
+        .overlay(
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    addChildButton
+                        .padding(.trailing, DesignSystem.Spacing.large)
+                        .padding(.bottom, DesignSystem.Spacing.large)
                 }
             }
-            .navigationBarHidden(true)
+        )
+        .refreshable {
+            await viewModel.refreshData()
         }
     }
     
-    // MARK: - Dashboard Header
-    private var dashboardHeader: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-            Text("Welcome back")
-                .font(DesignSystem.Typography.title2)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+    // MARK: - Private Views
+    
+    @ViewBuilder
+    private var loadingState: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: DesignSystem.Colors.primaryBlue))
             
-            Text(authService.currentUser?.name ?? "Parent")
-                .font(DesignSystem.Typography.largeTitle)
+            Text("Loading children...")
+                .font(DesignSystem.Typography.title1)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+        }
+    }
+    
+    @ViewBuilder
+    private var emptyState: some View {
+        EmptyChildrenView {
+            viewModel.addChild()
+        }
+    }
+    
+    @ViewBuilder
+    private var childrenList: some View {
+        ScrollView {
+            LazyVStack(spacing: DesignSystem.Spacing.medium) {
+                // Header
+                childrenHeader
+                    .padding(.horizontal, DesignSystem.Spacing.large)
+                    .padding(.top, DesignSystem.Spacing.large)
+                
+                // Children Cards
+                ForEach(viewModel.state.linkedChildren) { child in
+                    ModernChildCard(child: child) {
+                        viewModel.viewChildDetail(child)
+                    }
+                    .padding(.horizontal, DesignSystem.Spacing.large)
+                }
+            }
+            .padding(.bottom, DesignSystem.Spacing.xxLarge)
+        }
+    }
+    
+    @ViewBuilder
+    private var childrenHeader: some View {
+        VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
+            Text("Children")
+                .font(DesignSystem.Typography.title1)
+                .fontWeight(.bold)
                 .foregroundColor(DesignSystem.Colors.primaryText)
             
-            if pendingRequestsCount > 0 {
-                HStack(spacing: DesignSystem.Spacing.xSmall) {
-                    Image(systemName: "bell.badge.fill")
-                        .foregroundColor(DesignSystem.Colors.warning)
-                    Text("\(pendingRequestsCount) pending requests")
-                        .font(DesignSystem.Typography.callout)
-                        .foregroundColor(DesignSystem.Colors.warning)
-                }
-                .padding(.top, DesignSystem.Spacing.xxSmall)
-            }
+            Text("\(viewModel.state.linkedChildren.count) linked accounts")
+                .font(DesignSystem.Typography.subheadline)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     
-    // MARK: - Quick Actions Section
-    private var quickActionsSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Quick Actions")
-                .font(DesignSystem.Typography.title3)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                QuickActionCard(
-                    title: "Time Requests",
-                    count: pendingRequestsCount,
-                    icon: "hourglass.badge.plus",
-                    color: DesignSystem.Colors.warning
-                ) {
-                    showTimeRequests = true
-                }
-                
-                QuickActionCard(
-                    title: "Add Child",
-                    icon: "person.badge.plus",
-                    color: DesignSystem.Colors.primaryBlue
-                ) {
-                    showAddChild = true
-                }
-            }
+    @ViewBuilder
+    private var addChildButton: some View {
+        Button(action: { viewModel.addChild() }) {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.white)
         }
+        .frame(width: 56, height: 56)
+        .background(DesignSystem.Colors.primaryBlue)
+        .clipShape(Circle())
+        .shadow(
+            color: DesignSystem.Colors.primaryBlue.opacity(0.3),
+            radius: 8,
+            x: 0,
+            y: 4
+        )
     }
+}
+
+// MARK: - Modern Child Card
+
+/// Modern child card component with improved design
+struct ModernChildCard: View {
+    let child: User
+    let onTap: () -> Void
     
-    // MARK: - Children Overview Section
-    private var childrenOverviewSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            HStack {
-                Text("Your Children")
-                    .font(DesignSystem.Typography.title3)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
+    var body: some View {
+        BaseCard(action: onTap) {
+            HStack(spacing: DesignSystem.Spacing.medium) {
+                // Avatar
+                childAvatar
+                
+                // Info
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
+                    Text(child.name)
+                        .font(DesignSystem.Typography.body)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                    
+                    screenTimeInfo
+                }
                 
                 Spacer()
                 
-                Button("See All") {
-                    selectedTab = 1
-                }
-                .buttonStyle(TextButtonStyle(color: DesignSystem.Colors.primaryBlue))
-            }
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: DesignSystem.Spacing.medium) {
-                    ForEach(linkedChildren.prefix(3)) { child in
-                        ChildOverviewCard(child: child)
-                    }
-                }
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
             }
         }
     }
     
-    // MARK: - Recent Activity Section
-    private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("Recent Activity")
-                .font(DesignSystem.Typography.title3)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            VStack(spacing: DesignSystem.Spacing.small) {
-                ActivityRow(
-                    icon: "checkmark.circle.fill",
-                    title: "Task Completed",
-                    subtitle: "Math homework by Sarah",
-                    time: "2 hours ago",
-                    color: DesignSystem.Colors.success
-                )
-                
-                ActivityRow(
-                    icon: "hourglass",
-                    title: "Time Request",
-                    subtitle: "30 minutes requested by John",
-                    time: "3 hours ago",
-                    color: DesignSystem.Colors.warning
-                )
-                
-                ActivityRow(
-                    icon: "person.badge.plus",
-                    title: "Child Added",
-                    subtitle: "Emma linked to account",
-                    time: "Yesterday",
-                    color: DesignSystem.Colors.primaryBlue
-                )
-            }
-        }
-    }
-    
-    // MARK: - Children Tab
-    private var childrenTab: some View {
-        ZStack {
-            DesignSystem.Colors.groupedBackground
-                .ignoresSafeArea()
-            
-            ScrollView {
-                VStack(spacing: DesignSystem.Spacing.large) {
-                    // Header
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                        Text("Children")
-                            .font(DesignSystem.Typography.largeTitle)
-                            .foregroundColor(DesignSystem.Colors.primaryText)
-                        
-                        Text("\(linkedChildren.count) linked accounts")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DesignSystem.Spacing.large)
-                    .padding(.top, DesignSystem.Spacing.large)
-                    
-                    // Children List
-                    if linkedChildren.isEmpty {
-                        emptyChildrenView
-                    } else {
-                        LazyVStack(spacing: DesignSystem.Spacing.medium) {
-                            ForEach(linkedChildren) { child in
-                                NavigationLink(destination: ChildDetailView(child: child)) {
-                                    ChildCard(child: child)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                        .padding(.horizontal, DesignSystem.Spacing.large)
-                    }
-                }
-                .padding(.bottom, DesignSystem.Spacing.xxLarge)
-            }
-            .navigationBarHidden(true)
+    @ViewBuilder
+    private var childAvatar: some View {
+        Circle()
+            .fill(avatarGradient)
+            .frame(width: 56, height: 56)
             .overlay(
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: { showAddChild = true }) {
-                            Image(systemName: "plus")
-                        }
-                        .buttonStyle(IconButtonStyle(
-                            size: 56,
-                            backgroundColor: DesignSystem.Colors.primaryBlue,
-                            foregroundColor: .white
-                        ))
-                        .shadow(
-                            color: DesignSystem.Shadow.large.color,
-                            radius: DesignSystem.Shadow.large.radius,
-                            x: DesignSystem.Shadow.large.x,
-                            y: DesignSystem.Shadow.large.y
-                        )
-                        .padding(.trailing, DesignSystem.Spacing.large)
-                        .padding(.bottom, DesignSystem.Spacing.large)
+                Text(childInitials)
+                    .font(DesignSystem.Typography.body)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+            )
+    }
+    
+    @ViewBuilder
+    private var screenTimeInfo: some View {
+        if let balance = child.screenTimeBalance {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Image(systemName: "hourglass")
+                        .font(.system(size: 12))
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                    
+                    Text(balance.formattedTimeRemaining)
+                        .font(DesignSystem.Typography.caption1)
+                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                }
+                
+                if balance.isTimerActive {
+                    HStack(spacing: DesignSystem.Spacing.xSmall) {
+                        Circle()
+                            .fill(DesignSystem.Colors.success)
+                            .frame(width: 8, height: 8)
+                        
+                        Text("Timer Active")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundColor(DesignSystem.Colors.success)
                     }
                 }
-            )
+            }
+        } else {
+            Text("No screen time set")
+                .font(DesignSystem.Typography.caption1)
+                .foregroundColor(DesignSystem.Colors.tertiaryText)
         }
     }
     
-    // MARK: - Empty Children View
-    private var emptyChildrenView: some View {
+    private var childInitials: String {
+        let components = child.name.components(separatedBy: " ")
+        if components.count >= 2 {
+            return String(components[0].prefix(1) + components[1].prefix(1))
+        } else {
+            return String(child.name.prefix(2))
+        }
+    }
+    
+    private var avatarGradient: LinearGradient {
+        let hash = child.name.hashValue
+        let colors = [
+            (DesignSystem.Colors.primaryBlue, DesignSystem.Colors.primaryIndigo),
+            (DesignSystem.Colors.success, Color.green),
+            (DesignSystem.Colors.warning, Color.orange),
+            (Color.purple, Color.pink),
+            (Color.teal, Color.cyan)
+        ]
+        
+        let colorPair = colors[abs(hash) % colors.count]
+        return LinearGradient(
+            colors: [colorPair.0, colorPair.1],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+}
+
+// MARK: - Empty Children View
+
+/// Modern empty state for when no children are linked
+struct EmptyChildrenView: View {
+    let onAddChildTapped: () -> Void
+    
+    var body: some View {
         VStack(spacing: DesignSystem.Spacing.large) {
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 60))
-                .foregroundColor(DesignSystem.Colors.tertiaryText)
+            VStack(spacing: DesignSystem.Spacing.medium) {
+                Image(systemName: "person.2.slash")
+                    .font(.system(size: 60, weight: .thin))
+                    .foregroundColor(DesignSystem.Colors.tertiaryText)
+                
+                Text("No Children Linked")
+                    .font(DesignSystem.Typography.title1)
+                    .fontWeight(.semibold)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
+                
+                Text("Add your children to start managing their screen time")
+                    .font(DesignSystem.Typography.body)
+                    .foregroundColor(DesignSystem.Colors.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
             
-            Text("No Children Linked")
-                .font(DesignSystem.Typography.title2)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            Text("Add your children to start managing their screen time")
-                .font(DesignSystem.Typography.body)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .multilineTextAlignment(.center)
-            
-            Button(action: { showAddChild = true }) {
-                Text("Add First Child")
+            Button(action: onAddChildTapped) {
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 16, weight: .medium))
+                    Text("Add First Child")
+                        .fontWeight(.semibold)
+                }
             }
             .buttonStyle(PrimaryButtonStyle(isEnabled: true))
             .frame(maxWidth: 200)
@@ -319,347 +526,153 @@ struct ParentDashboardView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, DesignSystem.Spacing.xxxLarge)
     }
-    
-    // MARK: - Methods
-    private func loadLinkedChildren() {
-        guard let parentEmail = authService.currentUser?.email else { return }
-        linkedChildren = SharedDataManager.shared.getChildren(forParentEmail: parentEmail)
-    }
-    
-    private func updatePendingRequestsCount() {
-        guard let parentEmail = authService.currentUser?.email else { return }
-        pendingRequestsCount = SharedDataManager.shared.getPendingRequests(forParentEmail: parentEmail).count
-    }
-    
-    // MARK: - Views
-    private var addTaskButton: some View {
-        Button(action: { showAddTask = true }) {
-            Image(systemName: "plus")
-        }
-    }
 }
 
-// MARK: - Quick Action Card
-struct QuickActionCard: View {
-    let title: String
-    var count: Int? = nil
-    let icon: String
-    let color: Color
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                HStack {
-                    Image(systemName: icon)
-                        .font(.system(size: 24))
-                        .foregroundColor(color)
-                    
-                    Spacer()
-                    
-                    if let count = count, count > 0 {
-                        Text("\(count)")
-                            .font(DesignSystem.Typography.caption1)
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(color)
-                            .clipShape(Capsule())
-                    }
-                }
-                
-                Text(title)
-                    .font(DesignSystem.Typography.calloutBold)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(DesignSystem.Spacing.medium)
-            .background(DesignSystem.Colors.secondaryBackground)
-            .cornerRadius(DesignSystem.CornerRadius.medium)
-            .shadow(
-                color: DesignSystem.Shadow.small.color,
-                radius: DesignSystem.Shadow.small.radius,
-                x: DesignSystem.Shadow.small.x,
-                y: DesignSystem.Shadow.small.y
-            )
-        }
-        .buttonStyle(ScaleButtonStyle())
-    }
-}
+// MARK: - Modern Add Child View
 
-// MARK: - Child Overview Card
-struct ChildOverviewCard: View {
-    let child: User
-    
-    var body: some View {
-        VStack(spacing: DesignSystem.Spacing.small) {
-            // Avatar
-            Circle()
-                .fill(LinearGradient.childGradient)
-                .frame(width: 60, height: 60)
-                .overlay(
-                    Text(child.name.prefix(1))
-                        .font(DesignSystem.Typography.title2)
-                        .foregroundColor(.white)
-                )
-            
-            Text(child.name)
-                .font(DesignSystem.Typography.calloutBold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-                .lineLimit(1)
-            
-            if let balance = child.screenTimeBalance {
-                Text(balance.formattedTimeRemaining)
-                    .font(DesignSystem.Typography.caption2)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-            }
-        }
-        .frame(width: 100)
-        .padding(DesignSystem.Spacing.medium)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .cornerRadius(DesignSystem.CornerRadius.medium)
-    }
-}
-
-// MARK: - Activity Row
-struct ActivityRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let time: String
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.medium) {
-            Circle()
-                .fill(color.opacity(0.1))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: icon)
-                        .font(.system(size: 16))
-                        .foregroundColor(color)
-                )
-            
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxSmall) {
-                Text(title)
-                    .font(DesignSystem.Typography.calloutBold)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                
-                Text(subtitle)
-                    .font(DesignSystem.Typography.caption1)
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-            }
-            
-            Spacer()
-            
-            Text(time)
-                .font(DesignSystem.Typography.caption2)
-                .foregroundColor(DesignSystem.Colors.tertiaryText)
-        }
-        .padding(DesignSystem.Spacing.medium)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .cornerRadius(DesignSystem.CornerRadius.medium)
-    }
-}
-
-// MARK: - Child Card
-struct ChildCard: View {
-    let child: User
-    
-    var body: some View {
-        HStack(spacing: DesignSystem.Spacing.medium) {
-            // Avatar
-            Circle()
-                .fill(LinearGradient.childGradient)
-                .frame(width: 56, height: 56)
-                .overlay(
-                    Text(child.name.prefix(1))
-                        .font(DesignSystem.Typography.title2)
-                        .foregroundColor(.white)
-                )
-            
-            // Info
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxSmall) {
-                Text(child.name)
-                    .font(DesignSystem.Typography.bodyBold)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                
-                if let balance = child.screenTimeBalance {
-                    HStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Image(systemName: "hourglass")
-                            .font(.system(size: 12))
-                        Text(balance.formattedTimeRemaining)
-                            .font(DesignSystem.Typography.caption1)
-                    }
-                    .foregroundColor(DesignSystem.Colors.secondaryText)
-                    
-                    if balance.isTimerActive {
-                        Label("Timer Active", systemImage: "play.circle.fill")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundColor(DesignSystem.Colors.success)
-                    }
-                }
-            }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14))
-                .foregroundColor(DesignSystem.Colors.tertiaryText)
-        }
-        .padding(DesignSystem.Spacing.medium)
-        .background(DesignSystem.Colors.secondaryBackground)
-        .cornerRadius(DesignSystem.CornerRadius.card)
-        .shadow(
-            color: DesignSystem.Shadow.small.color,
-            radius: DesignSystem.Shadow.small.radius,
-            x: DesignSystem.Shadow.small.x,
-            y: DesignSystem.Shadow.small.y
-        )
-    }
-}
-
-// MARK: - Add Child View
-struct AddChildView: View {
-    // MARK: - Environment
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.managedObjectContext) private var viewContext
-    @EnvironmentObject private var authService: AuthenticationService
-    
-    // MARK: - State
+/// Modern add child view with improved UX
+struct ModernAddChildView: View {
+    @EnvironmentObject private var router: AppRouter
     @State private var childEmail = ""
+    @State private var isLoading = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
-    @State private var isLoading = false
     
-    // MARK: - Body
     var body: some View {
-        NavigationView {
-            ZStack {
-                DesignSystem.Colors.groupedBackground
-                    .ignoresSafeArea()
+        ZStack {
+            DesignSystem.Colors.groupedBackground
+                .ignoresSafeArea()
+            
+            VStack(spacing: DesignSystem.Spacing.xxLarge) {
+                // Header
+                headerSection
                 
-                VStack(spacing: DesignSystem.Spacing.xxLarge) {
-                    // Header
-                    VStack(spacing: DesignSystem.Spacing.small) {
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 60))
-                            .foregroundColor(DesignSystem.Colors.primaryBlue)
-                        
-                        Text("Link Child Account")
-                            .font(DesignSystem.Typography.title1)
-                        
-                        Text("Enter your child's email to connect their account")
-                            .font(DesignSystem.Typography.subheadline)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, DesignSystem.Spacing.xxLarge)
-                    
-                    // Form
-                    VStack(spacing: DesignSystem.Spacing.large) {
-                        CustomTextField(
-                            placeholder: "Child's Email",
-                            text: $childEmail,
-                            icon: "envelope.fill",
-                            keyboardType: .emailAddress,
-                            textContentType: .emailAddress
-                        )
-                        
-                        Text("The child must have already created their account")
-                            .font(DesignSystem.Typography.caption1)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.large)
-                    
-                    Spacer()
-                    
-                    // Action buttons
-                    VStack(spacing: DesignSystem.Spacing.medium) {
-                        Button(action: linkChild) {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Link Account")
-                            }
-                        }
-                        .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading && !childEmail.isEmpty, isLoading: isLoading))
-                        .disabled(isLoading || childEmail.isEmpty)
-                        
-                        Button("Cancel") {
-                            dismiss()
-                        }
-                        .buttonStyle(TextButtonStyle(color: DesignSystem.Colors.secondaryText))
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.large)
-                    .padding(.bottom, DesignSystem.Spacing.large)
+                // Form
+                formSection
+                
+                Spacer()
+                
+                // Actions
+                actionSection
+            }
+            .padding(DesignSystem.Spacing.large)
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button("Cancel") {
+                    router.dismissSheet()
                 }
             }
-            .navigationBarHidden(true)
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
-            }
-            .alert("Success", isPresented: $showSuccess) {
-                Button("OK") { dismiss() }
-            } message: {
-                Text("Child account linked successfully!")
-            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .alert("Success", isPresented: $showSuccess) {
+            Button("OK") { router.dismissSheet() }
+        } message: {
+            Text("Child account linked successfully!")
         }
     }
     
-    // MARK: - Actions
-    private func linkChild() {
-        guard let parentUser = authService.currentUser,
-              let parentEmail = parentUser.email else {
-            errorMessage = "Parent email not found"
-            showError = true
-            return
+    @ViewBuilder
+    private var headerSection: some View {
+        VStack(spacing: DesignSystem.Spacing.small) {
+            Image(systemName: "person.badge.plus")
+                .font(.system(size: 60))
+                .foregroundColor(DesignSystem.Colors.primaryBlue)
+            
+            Text("Link Child Account")
+                .font(DesignSystem.Typography.title1)
+                .fontWeight(.bold)
+            
+            Text("Enter your child's email to connect their account")
+                .font(DesignSystem.Typography.subheadline)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .multilineTextAlignment(.center)
         }
-        
+    }
+    
+    @ViewBuilder
+    private var formSection: some View {
+        VStack(spacing: DesignSystem.Spacing.large) {
+            CustomTextField(
+                placeholder: "Child's Email",
+                text: $childEmail,
+                icon: "envelope.fill",
+                keyboardType: .emailAddress,
+                textContentType: .emailAddress
+            )
+            
+            Text("The child must have already created their account")
+                .font(DesignSystem.Typography.caption1)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+    
+    @ViewBuilder
+    private var actionSection: some View {
+        VStack(spacing: DesignSystem.Spacing.medium) {
+            Button(action: linkChild) {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Text("Link Account")
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle(isEnabled: !isLoading && !childEmail.isEmpty, isLoading: isLoading))
+            .disabled(isLoading || childEmail.isEmpty)
+        }
+    }
+    
+    private func linkChild() {
         isLoading = true
         
-        // Refresh user cache to ensure we have the latest users
-        SharedDataManager.shared.refreshUserCache()
-        
-        // Check if child exists
-        guard let childUser = SharedDataManager.shared.findUser(byEmail: childEmail) else {
-            errorMessage = "No child account found with this email. The child must create an account first."
-            showError = true
-            isLoading = false
-            return
+        DispatchQueue.global().async {
+            let userService = UserService.shared
+            let currentEmail = self.childEmail
+            
+            guard let parentUser = userService.getCurrentUser(),
+                  let parentEmail = parentUser.email else {
+                DispatchQueue.main.async {
+                    self.errorMessage = "Parent email not found"
+                    self.showError = true
+                    self.isLoading = false
+                }
+                return
+            }
+            
+            // Call the synchronous method directly
+            let success = SharedDataManager.shared.linkChildToParent(
+                childEmail: currentEmail,
+                parentEmail: parentEmail
+            )
+            
+            DispatchQueue.main.async {
+                if success {
+                    self.showSuccess = true
+                } else {
+                    self.errorMessage = "Failed to link child account"
+                    self.showError = true
+                }
+                self.isLoading = false
+            }
         }
-        
-        // Check if it's actually a child account
-        guard !childUser.isParent else {
-            errorMessage = "This email belongs to a parent account, not a child account."
-            showError = true
-            isLoading = false
-            return
-        }
-        
-        // Link the child to parent
-        if SharedDataManager.shared.linkChildToParent(childEmail: childEmail, parentEmail: parentEmail) {
-            showSuccess = true
-        } else {
-            errorMessage = "Failed to link child account"
-            showError = true
-        }
-        
-        isLoading = false
     }
 }
 
 // MARK: - Preview
+
 struct ParentDashboardView_Previews: PreviewProvider {
     static var previews: some View {
-        ParentDashboardView()
-            .environmentObject(AuthenticationService.shared)
+        ParentDashboardView_Alternative()
             .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
     }
 } 
