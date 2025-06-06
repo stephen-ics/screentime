@@ -1,90 +1,5 @@
 import SwiftUI
 
-// MARK: - Change Password View
-struct ChangePasswordView: View {
-    @State private var currentPassword = ""
-    @State private var newPassword = ""
-    @State private var confirmPassword = ""
-    
-    var body: some View {
-        Form {
-            Section(header: Text("Current Password")) {
-                SecureField("Enter current password", text: $currentPassword)
-            }
-            
-            Section(header: Text("New Password")) {
-                SecureField("Enter new password", text: $newPassword)
-                SecureField("Confirm new password", text: $confirmPassword)
-            }
-            
-            Section(footer: Text("Password must be at least 8 characters long and contain a mix of letters and numbers.")) {
-                Button(action: {}) {
-                    Text("Update Password")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(BorderedProminentButtonStyle())
-                .disabled(currentPassword.isEmpty || newPassword.isEmpty || confirmPassword.isEmpty || newPassword != confirmPassword)
-            }
-        }
-        .navigationTitle("Change Password")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Connected Accounts View
-struct ConnectedAccountsView: View {
-    var body: some View {
-        List {
-            Section(header: Text("Available Connections")) {
-                ConnectedAccountRow(
-                    provider: "Apple",
-                    icon: "apple.logo",
-                    isConnected: false
-                )
-                
-                ConnectedAccountRow(
-                    provider: "Google",
-                    icon: "g.circle.fill",
-                    isConnected: false
-                )
-                
-                ConnectedAccountRow(
-                    provider: "Facebook",
-                    icon: "f.circle.fill",
-                    isConnected: false
-                )
-            }
-        }
-        .navigationTitle("Connected Accounts")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-struct ConnectedAccountRow: View {
-    let provider: String
-    let icon: String
-    let isConnected: Bool
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundColor(isConnected ? .green : .gray)
-            
-            Text(provider)
-            
-            Spacer()
-            
-            Button(action: {}) {
-                Text(isConnected ? "Disconnect" : "Connect")
-                    .font(.caption)
-                    .foregroundColor(isConnected ? .red : .accentColor)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-}
-
 // MARK: - Two-Factor Authentication View
 struct TwoFactorAuthView: View {
     @State private var isEnabled = false
@@ -334,6 +249,49 @@ struct AppearancePreferencesView: View {
     }
 }
 
+// MARK: - Connected Accounts View  
+struct ConnectedAccountsView: View {
+    var body: some View {
+        List {
+            Section(header: Text("Connected Accounts")) {
+                HStack {
+                    Image(systemName: "globe")
+                        .foregroundColor(.blue)
+                    VStack(alignment: .leading) {
+                        Text("Google")
+                        Text("Not connected")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Connect") {
+                        // Connect Google account
+                    }
+                    .buttonStyle(.bordered)
+                }
+                
+                HStack {
+                    Image(systemName: "applelogo")
+                        .foregroundColor(.black)
+                    VStack(alignment: .leading) {
+                        Text("Apple")
+                        Text("Not connected")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Connect") {
+                        // Connect Apple account
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+        }
+        .navigationTitle("Connected Accounts")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - Data Management View
 struct DataManagementView: View {
     @State private var showExportOptions = false
@@ -416,8 +374,8 @@ struct DataExportView: View {
             
             Spacer()
         }
-        .padding(.top, 40)
-        .navigationTitle("Data Export")
+        .padding()
+        .navigationTitle("Export Data")
         .navigationBarTitleDisplayMode(.inline)
     }
 } 
