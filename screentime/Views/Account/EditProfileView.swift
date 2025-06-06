@@ -94,4 +94,44 @@ struct EditProfileView: View {
             }
         }
     }
+}
+
+// MARK: - Change Password View
+struct ChangePasswordView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var currentPassword: String = ""
+    @State private var newPassword: String = ""
+    @State private var confirmPassword: String = ""
+    
+    var body: some View {
+        NavigationView {
+            Form {
+                Section(header: Text("Change Password")) {
+                    SecureField("Current Password", text: $currentPassword)
+                    SecureField("New Password", text: $newPassword)
+                    SecureField("Confirm New Password", text: $confirmPassword)
+                }
+                
+                Section(footer: Text("Password must be at least 8 characters long.")) {
+                    EmptyView()
+                }
+            }
+            .navigationTitle("Change Password")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        // Change password logic here
+                        dismiss()
+                    }
+                    .disabled(newPassword.count < 8 || newPassword != confirmPassword)
+                }
+            }
+        }
+    }
 } 
