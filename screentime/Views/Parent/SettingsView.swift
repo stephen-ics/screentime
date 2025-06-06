@@ -70,16 +70,16 @@ struct SettingsView: View {
                         Text("About Screen Time Manager")
                     }
                     
-                    Link("Privacy Policy", destination: URL(string: "https://screentime.world/privacy")!)
+                    Link("Privacy Policy", destination: URL(string: "https://example.com/privacy") ?? URL(string: "https://apple.com")!)
                     
-                    Link("Terms of Service", destination: URL(string: "https://screentime.world/terms")!)
+                    Link("Terms of Service", destination: URL(string: "https://example.com/terms") ?? URL(string: "https://apple.com")!)
                 }
                 
                 // Support Section
                 Section(header: Text("Support")) {
-                    Link("Contact Support", destination: URL(string: "mailto:support@screentime.world")!)
+                    Link("Contact Support", destination: URL(string: "mailto:support@example.com") ?? URL(string: "https://apple.com")!)
                     
-                    Link("FAQ", destination: URL(string: "https://screentime.world/faq")!)
+                    Link("FAQ", destination: URL(string: "https://example.com/faq") ?? URL(string: "https://apple.com")!)
                 }
             }
             .navigationTitle("Settings")
