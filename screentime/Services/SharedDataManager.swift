@@ -3,7 +3,7 @@ import CoreData
 import Combine
 
 /// Simulates a backend service for sharing data between devices
-final class SharedDataManager {
+final class SharedDataManager: @unchecked Sendable {
     static let shared = SharedDataManager()
     
     // MARK: - Properties
@@ -119,7 +119,7 @@ final class SharedDataManager {
             print("Found registered users in UserDefaults: \(registeredUsers)")
             
             // For each registered user not in our cache, try to create a placeholder
-            for (email, userType) in registeredUsers {
+            for (email, _) in registeredUsers {
                 if users[email] == nil {
                     print("User \(email) is registered but not in cache - they may be on another device")
                 }
@@ -291,12 +291,22 @@ final class SharedDataManager {
 }
 
 // MARK: - Data Models
-struct TimeRequest: Codable {
+struct TimeRequest: Codable, Hashable, Equatable {
     let id: String
     let childEmail: String
     let parentEmail: String
     let requestedMinutes: Int32
     let timestamp: Date
+    
+    // MARK: - Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
+    
+    // MARK: - Equatable
+    static func == (lhs: TimeRequest, rhs: TimeRequest) -> Bool {
+        return lhs.id == rhs.id
+    }
 }
 
 enum DataUpdateEvent {
