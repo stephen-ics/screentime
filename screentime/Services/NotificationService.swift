@@ -1,6 +1,7 @@
 import Foundation
 import UserNotifications
 import UIKit
+import CoreData
 
 /// Manages local and remote notifications for the app
 final class NotificationService: NSObject {
@@ -83,118 +84,135 @@ final class NotificationService: NSObject {
     }
     
     // MARK: - Notification Scheduling
-    func scheduleTaskNotification(for task: Task) throws {
+    /// Schedule notification for task reminders
+    func scheduleTaskNotification(for task: SupabaseTask) throws {
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("New Task Assigned", comment: "")
-        content.body = String(format: NSLocalizedString("You have a new task: %@", comment: ""), task.title)
-        content.sound = .default
+        content.title = "Task Reminder"
+        content.body = "Don't forget to complete: \(task.title)"
+        content.sound = UNNotificationSound.default
+        content.categoryIdentifier = Constants.taskCompletionCategory
         
-        if let taskID = task.id {
-            content.userInfo = ["taskID": taskID.uuidString]
-        }
-        
-        let request = UNNotificationRequest(
-            identifier: "new-task-\(task.id?.uuidString ?? UUID().uuidString)",
-            content: content,
-            trigger: nil
-        )
-        
-        notificationCenter.add(request) { error in
-            if let error = error {
-                print("Failed to schedule task notification: \(error)")
+        // Schedule for a reasonable future time since we don't have due dates yet
+        let calendar = Calendar.current
+        if let futureDate = calendar.date(byAdding: .hour, value: 1, to: Date()) {
+            let trigger = UNCalendarNotificationTrigger(
+                dateMatching: calendar.dateComponents([.year, .month, .day, .hour, .minute], from: futureDate),
+                repeats: false
+            )
+            
+            let request = UNNotificationRequest(
+                identifier: "task-\(task.id.uuidString)",
+                content: content,
+                trigger: trigger
+            )
+            
+            notificationCenter.add(request) { error in
+                if let error = error {
+                    print("Failed to schedule task notification: \(error)")
+                }
             }
         }
     }
     
-    func scheduleTaskCompletionNotification(task: Task) async throws {
+    /// Schedule notification when a task is completed
+    func scheduleTaskCompletionNotification(task: SupabaseTask) async throws {
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("Task Completed", comment: "")
-        content.body = String(format: NSLocalizedString("%@ has completed the task: %@", comment: ""), task.assignedTo?.name ?? "", task.title)
-        content.sound = .default
-        content.categoryIdentifier = Constants.taskCompletionCategory
-        
-        if let taskID = task.id {
-            content.userInfo = ["taskID": taskID.uuidString]
-        }
+        content.title = "Task Completed!"
+        content.body = "Great job completing: \(task.title)"
+        content.sound = UNNotificationSound.default
         
         let request = UNNotificationRequest(
-            identifier: "task-\(task.id?.uuidString ?? UUID().uuidString)",
+            identifier: "task-completed-\(task.id.uuidString)",
             content: content,
-            trigger: nil
+            trigger: nil // Immediate notification
         )
         
         try await notificationCenter.add(request)
     }
     
-    func scheduleTimeRequestNotification(from user: User) async throws {
+    /// Schedule notification for time requests
+    func scheduleTimeRequestNotification(for user: User, requestedMinutes: Int) async throws {
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("Screen Time Request", comment: "")
-        content.body = String(format: NSLocalizedString("%@ is requesting more screen time", comment: ""), user.name)
-        content.sound = .default
+        content.title = "Time Request"
+        content.body = "\(user.name) is requesting \(requestedMinutes) more minutes"
+        content.sound = UNNotificationSound.default
         content.categoryIdentifier = Constants.timeRequestCategory
         
-        if let userID = user.id {
-            content.userInfo = ["userID": userID.uuidString]
-        }
-        
         let request = UNNotificationRequest(
-            identifier: "time-request-\(user.id?.uuidString ?? UUID().uuidString)",
+            identifier: "time-request-\(user.id.uuidString)",
             content: content,
-            trigger: nil
+            trigger: nil // Immediate notification
         )
         
         try await notificationCenter.add(request)
     }
     
-    func scheduleLowTimeNotification(for balance: ScreenTimeBalance) async throws {
-        guard let user = balance.user else { return }
-        
+    /// Schedule notification for low screen time
+    func scheduleLowTimeNotification(for balance: SupabaseScreenTimeBalance) async throws {
         let content = UNMutableNotificationContent()
-        content.title = NSLocalizedString("Low Screen Time", comment: "")
-        content.body = String(format: NSLocalizedString("%@ has 5 minutes of screen time remaining", comment: ""), user.name)
-        content.sound = .default
+        content.title = "Low Screen Time"
+        content.body = "Only \(Int(balance.availableSeconds / 60)) minutes remaining today"
+        content.sound = UNNotificationSound.default
         content.categoryIdentifier = Constants.lowTimeCategory
         
-        if let userID = user.id {
-            content.userInfo = ["userID": userID.uuidString]
-        }
-        
         let request = UNNotificationRequest(
-            identifier: "low-time-\(user.id?.uuidString ?? UUID().uuidString)",
+            identifier: "low-time-\(balance.userId.uuidString)",
             content: content,
-            trigger: nil
+            trigger: nil // Immediate notification
         )
         
         try await notificationCenter.add(request)
     }
     
     // MARK: - Notification Handling
-    func handleTaskApproval(taskID: UUID) async {
-        do {
-            let request = Task.fetchRequest()
-            request.predicate = NSPredicate(format: "id == %@", taskID as CVarArg)
-            
-            guard let task = try CoreDataManager.shared.fetch(request).first else {
-                return
-            }
-            
-            task.isApproved = true
-            if let assignedTo = task.assignedTo {
-                assignedTo.screenTimeBalance?.addTime(task.rewardMinutes)
-            }
-            try CoreDataManager.shared.save()
-        } catch {
-            print("Failed to handle task approval: \(error)")
+    
+    /// Handle notification response (when user taps on notification or action)
+    func handleNotificationResponse(_ response: UNNotificationResponse) async {
+        let identifier = response.notification.request.identifier
+        let actionIdentifier = response.actionIdentifier
+        
+        print("Handling notification response: \(identifier), action: \(actionIdentifier)")
+        
+        // Handle different types of actions
+        switch actionIdentifier {
+        case Constants.approveAction:
+            await handleApproveAction(identifier: identifier)
+        case Constants.denyAction:
+            await handleDenyAction(identifier: identifier)
+        case Constants.grantTimeAction:
+            await handleGrantTimeAction(identifier: identifier)
+        default:
+            // Default tap - just open the app
+            break
         }
     }
     
-    func handleTimeGrant(userID: UUID, minutes: Int32) async {
-        guard let user = try? await CoreDataManager.shared.fetchUser(withID: userID) else {
-            return
-        }
-        
-        user.screenTimeBalance?.addTime(minutes)
-        try? CoreDataManager.shared.save()
+    private func handleApproveAction(identifier: String) async {
+        // During transition: simplified handling
+        print("Approve action for: \(identifier)")
+    }
+    
+    private func handleDenyAction(identifier: String) async {
+        // During transition: simplified handling
+        print("Deny action for: \(identifier)")
+    }
+    
+    private func handleGrantTimeAction(identifier: String) async {
+        // During transition: simplified handling
+        print("Grant time action for: \(identifier)")
+    }
+    
+    // MARK: - Handler Methods
+    private func handleTaskApproval(taskID: UUID) async {
+        // During architectural transition: simplified implementation
+        print("Handling task approval for ID: \(taskID)")
+        // TODO: Implement with SupabaseDataRepository when fully migrated
+    }
+    
+    private func handleTimeGrant(userID: UUID, minutes: Int) async {
+        // During architectural transition: simplified implementation
+        print("Handling time grant for user ID: \(userID), minutes: \(minutes)")
+        // TODO: Implement with SupabaseDataRepository when fully migrated
     }
 }
 
