@@ -3,8 +3,8 @@ import PhotosUI
 
 struct AccountView: View {
     // MARK: - Environment
-    @EnvironmentObject private var authService: AuthenticationService
-    @Environment(\.managedObjectContext) private var viewContext
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var router: AppRouter
     
     // MARK: - State
     @State private var selectedSection: AccountSection? = nil
@@ -13,6 +13,9 @@ struct AccountView: View {
     @State private var showingLogoutConfirmation = false
     @State private var profileImage: UIImage?
     @State private var showingDataExport = false
+    @State private var showingSignOutConfirmation = false
+    @State private var isLoading = false
+    @State private var error: AuthError?
     
     // MARK: - Body
     var body: some View {
@@ -40,19 +43,20 @@ struct AccountView: View {
             }
             .alert("Delete Account", isPresented: $showingDeleteConfirmation) {
                 Button("Cancel", role: .cancel) {}
-                Button("Delete", role: .destructive) {
-                    deleteAccount()
-                }
+                Button("Delete", role: .destructive, action: deleteAccount)
             } message: {
-                Text("Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently deleted.")
+                Text("Are you sure you want to permanently delete your account? This action cannot be undone.")
             }
-            .alert("Sign Out", isPresented: $showingLogoutConfirmation) {
+            .alert("Sign Out", isPresented: $showingSignOutConfirmation) {
+                Button("Sign Out", role: .destructive, action: signOut)
                 Button("Cancel", role: .cancel) {}
-                Button("Sign Out", role: .destructive) {
-                    authService.signOut()
-                }
             } message: {
                 Text("Are you sure you want to sign out?")
+            }
+            .overlay {
+                if isLoading {
+                    ProgressView("Processing...")
+                }
             }
         }
     }
@@ -96,18 +100,18 @@ struct AccountView: View {
                 
                 // User Info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(authService.currentUser?.name ?? "User")
+                    Text(authService.currentProfile?.name ?? "User")
                         .font(.title3)
                         .fontWeight(.semibold)
                     
-                    Text(authService.currentUser?.email ?? "")
+                    Text(authService.currentProfile?.email ?? "")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
                     HStack {
-                        Image(systemName: authService.currentUser?.isParent == true ? "person.fill" : "person")
+                        Image(systemName: authService.currentProfile?.userType == .parent ? "person.fill" : "person")
                             .font(.caption)
-                        Text(authService.currentUser?.isParent == true ? "Parent Account" : "Child Account")
+                        Text(authService.currentProfile?.userType == .parent ? "Parent Account" : "Child Account")
                             .font(.caption)
                     }
                     .foregroundColor(.accentColor)
@@ -241,7 +245,7 @@ struct AccountView: View {
                 )
             }
             
-            Button(action: { showingLogoutConfirmation = true }) {
+            Button(action: { showingSignOutConfirmation = true }) {
                 SettingsRow(
                     icon: "rectangle.portrait.and.arrow.right",
                     title: "Sign Out",
@@ -287,22 +291,34 @@ struct AccountView: View {
         }
     }
     
-    private func deleteAccount() {
-        // Implement account deletion
-        _Concurrency.Task {
+    private func signOut() {
+        isLoading = true
+        Task {
             do {
-                // Delete user data
-                if let user = authService.currentUser {
-                    try await MainActor.run {
-                        try CoreDataManager.shared.delete(user)
-                    }
-                }
-                
-                // Sign out
-                authService.signOut()
+                try await authService.signOut()
+            } catch let authError as AuthError {
+                error = authError
             } catch {
-                print("Failed to delete account: \(error)")
+                self.error = .unknownError
             }
+            isLoading = false
+        }
+    }
+    
+    private func deleteAccount() {
+        isLoading = true
+        Task {
+            // Note: Deleting a user from Supabase Auth is a privileged operation
+            // and should be handled by a database function.
+            // For now, we will just sign the user out.
+            do {
+                try await authService.signOut()
+            } catch let authError as AuthError {
+                error = authError
+            } catch {
+                self.error = .unknownError
+            }
+            isLoading = false
         }
     }
 }
@@ -368,6 +384,6 @@ struct SettingsRow: View {
 struct AccountView_Previews: PreviewProvider {
     static var previews: some View {
         AccountView()
-            .environmentObject(AuthenticationService.shared)
+            .environmentObject(SafeSupabaseAuthService.shared)
     }
 } 

@@ -1,44 +1,38 @@
 import SwiftUI
 
 struct PrivacySettingsView: View {
-    @AppStorage("privacy.shareUsageData") private var shareUsageData = false
+    @EnvironmentObject private var authService: SupabaseAuthService
+    @State private var shareUsageData = false
+    @State private var analyticsEnabled = false
+    @State private var allowDataExport = false
+    @State private var shareAnalytics = false
+    @State private var allowRecommendations = false
+    @State private var sharePerformanceData = false
     @AppStorage("privacy.shareWithParent") private var shareWithParent = true
     @AppStorage("privacy.profileVisibility") private var profileVisibility = "contacts"
     @AppStorage("privacy.activityStatus") private var showActivityStatus = true
-    @AppStorage("privacy.allowDataExport") private var allowDataExport = true
-    @AppStorage("privacy.analyticsEnabled") private var analyticsEnabled = false
     
     var body: some View {
         Form {
-            Section(header: Text("Data Sharing")) {
-                Toggle(isOn: $shareUsageData) {
-                    VStack(alignment: .leading) {
-                        Text("Share Usage Data")
-                        Text("Help improve the app by sharing anonymous usage data")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+            Section {
+                Toggle("Share Usage Analytics", isOn: $shareAnalytics)
+                Toggle("Allow App Recommendations", isOn: $allowRecommendations)
+                Toggle("Share Performance Data", isOn: $sharePerformanceData)
+            } header: {
+                Text("Data Sharing")
+            }
+            
+            Section {
+                Button("Reset Privacy Settings") {
+                    resetPrivacySettings()
                 }
+                .foregroundColor(.red)
                 
-                Toggle(isOn: $analyticsEnabled) {
-                    VStack(alignment: .leading) {
-                        Text("Analytics")
-                        Text("Allow collection of app performance data")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                Button("Export My Data") {
+                    exportUserData()
                 }
-                
-                if authService.currentUser?.isParent == false {
-                    Toggle(isOn: $shareWithParent) {
-                        VStack(alignment: .leading) {
-                            Text("Share with Parent")
-                            Text("Allow parent to see your screen time data")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
+            } header: {
+                Text("Privacy Actions")
             }
             
             Section(header: Text("Profile Visibility")) {
@@ -76,26 +70,15 @@ struct PrivacySettingsView: View {
                             .foregroundColor(.primary)
                     }
                 }
-                
-                Button(action: resetPrivacySettings) {
-                    HStack {
-                        Image(systemName: "arrow.counterclockwise")
-                            .foregroundColor(.red)
-                        Text("Reset Privacy Settings")
-                            .foregroundColor(.red)
-                    }
-                }
             }
             
             Section(footer: privacyFooter) {
                 EmptyView()
             }
         }
-        .navigationTitle("Privacy")
+        .navigationTitle("Privacy Settings")
         .navigationBarTitleDisplayMode(.inline)
     }
-    
-    @EnvironmentObject private var authService: AuthenticationService
     
     private var privacyFooter: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -126,7 +109,15 @@ struct PrivacySettingsView: View {
         shareWithParent = true
         profileVisibility = "contacts"
         showActivityStatus = true
-        allowDataExport = true
+        allowDataExport = false
         analyticsEnabled = false
+        shareAnalytics = false
+        allowRecommendations = false
+        sharePerformanceData = false
+    }
+    
+    private func exportUserData() {
+        // Implement user data export
+        print("Exporting user data...")
     }
 } 

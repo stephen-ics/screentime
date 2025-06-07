@@ -1,15 +1,13 @@
 import SwiftUI
 
 struct EditProfileView: View {
-    @EnvironmentObject private var authService: AuthenticationService
+    @EnvironmentObject private var authService: SupabaseAuthService
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.managedObjectContext) private var viewContext
     
     @State private var name: String = ""
     @State private var email: String = ""
     @State private var isLoading = false
-    @State private var showError = false
-    @State private var errorMessage = ""
+    @State private var error: AuthError?
     @State private var hasChanges = false
     
     var body: some View {
@@ -25,70 +23,60 @@ struct EditProfileView: View {
                     .autocapitalization(.none)
                     .onChange(of: email) { _ in hasChanges = true }
             }
-            
-            Section(footer: Text("Changes to your email address will require you to sign in again.")) {
-                EmptyView()
-            }
         }
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarItems(
-            leading: Button("Cancel") { dismiss() },
-            trailing: Button("Save") { saveChanges() }
-                .disabled(!hasChanges || isLoading)
-        )
-        .onAppear {
-            loadCurrentData()
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { saveChanges() }
+                    .disabled(!hasChanges || isLoading)
+            }
         }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
+        .onAppear(perform: loadUserData)
+        .alert(isPresented: .constant(error != nil), error: error) { _ in
+            Button("OK") { error = nil }
+        } message: { error in
+            Text(error.recoverySuggestion ?? "Please try again.")
         }
         .overlay {
             if isLoading {
                 ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color.black.opacity(0.3))
             }
         }
     }
     
-    private func loadCurrentData() {
-        guard let user = authService.currentUser else { return }
-        name = user.name
-        email = user.email ?? ""
+    private func loadUserData() {
+        guard let profile = authService.currentProfile else { return }
+        name = profile.name
+        email = profile.email
     }
     
     private func saveChanges() {
-        guard let user = authService.currentUser else { return }
+        guard var profile = authService.currentProfile else { return }
         
         isLoading = true
         
-        _Concurrency.Task {
+        Task {
+            profile.name = name
+            profile.email = email
+            
             do {
+                try await authService.updateProfile(profile)
                 await MainActor.run {
-                    user.name = name
-                    user.email = email
-                    user.updatedAt = Date()
-                }
-                
-                try await MainActor.run {
-                    try viewContext.save()
-                }
-                
-                // Update SharedDataManager if email changed
-                if email != user.email {
-                    SharedDataManager.shared.registerUser(user, email: email)
-                }
-                
-                await MainActor.run {
+                    isLoading = false
                     dismiss()
+                }
+            } catch let authError as AuthError {
+                await MainActor.run {
+                    self.error = authError
+                    isLoading = false
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to update profile: \(error.localizedDescription)"
-                    showError = true
+                    self.error = .unknownError
                     isLoading = false
                 }
             }
