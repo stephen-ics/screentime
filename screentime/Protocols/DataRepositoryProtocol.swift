@@ -1,4 +1,5 @@
 import Foundation
+import CoreData
 import Combine
 
 /// Protocol defining data repository operations for parent-child relationships and time requests
