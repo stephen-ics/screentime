@@ -74,29 +74,19 @@ final class AppTrackingService {
     
     // MARK: - App Restrictions
     func restrictApps(for user: User) {
-        guard let balance = user.screenTimeBalance,
-              !balance.hasTimeRemaining else {
-            return
-        }
+        // TODO: Implement with SupabaseScreenTimeBalance model
+        // Note: User model no longer has screenTimeBalance during migration
+        print("App restrictions not implemented yet for user: \(user.name)")
         
-        // Get the list of restricted apps
-        let restrictedApps = balance.approvedApps
-            .filter { $0.isEnabled }
-            .compactMap { app -> ApplicationToken? in
-                // In a real implementation, you would get the ApplicationToken
-                // from the FamilyControls selection
-                return nil
-            }
+        // Original implementation commented out:
+        // guard let balance = user.screenTimeBalance,
+        //       !balance.hasTimeRemaining else {
+        //     return
+        // }
         
-        // Apply restrictions
-        if !restrictedApps.isEmpty {
-            settingsStore.shield.applications = Set(restrictedApps)
-        } else {
-            settingsStore.shield.applications = nil
-        }
-        
-        // Set category policy
-        settingsStore.shield.applicationCategories = .specific([], except: Set())
+        // Remove all restrictions for now
+        settingsStore.shield.applications = nil
+        settingsStore.shield.applicationCategories = nil
     }
     
     func removeRestrictions() {
@@ -106,25 +96,91 @@ final class AppTrackingService {
     
     // MARK: - App Usage Tracking
     func trackAppUsage(for user: User) {
-        guard let balance = user.screenTimeBalance,
-              balance.hasTimeRemaining,
-              balance.isTimerActive else {
-            return
-        }
+        // TODO: Implement with SupabaseScreenTimeBalance model
+        // Note: User model no longer has screenTimeBalance during migration
+        print("App usage tracking not implemented yet for user: \(user.name)")
+        return
         
-        // Start the timer if approved apps are being used
-        if isUsingApprovedApps(balance.approvedApps) {
-            balance.startTimer()
-        } else {
-            balance.stopTimer()
-        }
+        // Original implementation commented out:
+        // guard let balance = user.screenTimeBalance,
+        //       balance.hasTimeRemaining,
+        //       balance.isTimerActive else {
+        //     return
+        // }
     }
     
-    private func isUsingApprovedApps(_ apps: Set<ApprovedApp>) -> Bool {
-        // In a real implementation, we would use the FamilyControls framework
-        // to check if any of the approved apps are currently active
-        // For demo purposes, we'll just return true
+    /// Checks if the user is using approved apps
+    /// - Parameter apps: Set of approved apps to check
+    /// - Returns: Bool indicating if using approved apps
+    private func isUsingApprovedApps(_ apps: Set<SupabaseApprovedApp>) -> Bool {
+        // TODO: Implement approved apps checking with SupabaseApprovedApp
         return true
+    }
+    
+    // MARK: - Helper Methods
+    
+    /// Updates screen time balance for a user
+    /// - Parameters:
+    ///   - user: The user to update
+    ///   - minutes: Minutes to add/subtract
+    private func updateScreenTimeBalance(for user: User, minutes: Int32) {
+        // TODO: Implement screen time balance updates
+        // Note: User model no longer has screenTimeBalance during migration
+        print("Screen time balance update not implemented yet for user: \(user.name)")
+    }
+    
+    /// Checks if user has exceeded their screen time limit
+    /// - Parameter user: The user to check
+    /// - Returns: Bool indicating if limit is exceeded
+    private func hasExceededLimit(for user: User) -> Bool {
+        // TODO: Implement screen time limit checking
+        // Note: User model no longer has screenTimeBalance during migration
+        print("Screen time limit checking not implemented yet for user: \(user.name)")
+        return false
+    }
+    
+    /// Handles when screen time limit is reached
+    private func handleLimitReached() {
+        // TODO: Implement proper screen time limit handling
+        // Note: AuthenticationService is deprecated, need to use SupabaseAuthService
+        print("Screen time limit reached - implement proper handling")
+    }
+    
+    /// Handles when device becomes inactive
+    private func handleDeviceInactive() {
+        // TODO: Implement proper device inactive handling
+        // Note: AuthenticationService is deprecated, need to use SupabaseAuthService  
+        print("Device inactive - implement proper handling")
+    }
+    
+    /// Grants additional screen time to a user
+    /// - Parameters:
+    ///   - user: The user to grant time to
+    ///   - minutes: Number of minutes to grant
+    func grantAdditionalTime(to user: User, minutes: Int32) {
+        // TODO: Implement screen time granting with SupabaseScreenTimeBalance
+        updateScreenTimeBalance(for: user, minutes: minutes)
+        
+        // Send notification about granted time
+        let message = "You've been granted \(minutes) additional minutes of screen time!"
+        // TODO: Implement notification sending
+        print(message)
+    }
+    
+    /// Removes screen time from a user
+    /// - Parameters:
+    ///   - user: The user to remove time from
+    ///   - minutes: Number of minutes to remove
+    func removeScreenTime(from user: User, minutes: Int32) {
+        // TODO: Implement screen time removal with SupabaseScreenTimeBalance
+        updateScreenTimeBalance(for: user, minutes: -minutes)
+        
+        if hasExceededLimit(for: user) {
+            // Block apps if limit exceeded
+            Task {
+                try? await startMonitoring()
+            }
+        }
     }
 }
 
@@ -135,12 +191,15 @@ extension AppTrackingService {
         override func intervalDidStart(for activity: DeviceActivityName) {
             super.intervalDidStart(for: activity)
             
-            // Handle interval start
-            guard let user = AuthenticationService.shared.currentUser else {
-                return
-            }
+            // TODO: Replace with SupabaseAuthService when fully implemented
+            // Note: AuthenticationService is deprecated
+            print("Interval started for activity: \(activity)")
             
-            AppTrackingService.shared.trackAppUsage(for: user)
+            // Original implementation commented out:
+            // guard let user = AuthenticationService.shared.currentUser else {
+            //     return
+            // }
+            // AppTrackingService.shared.trackAppUsage(for: user)
         }
         
         override func intervalDidEnd(for activity: DeviceActivityName) {
@@ -153,12 +212,15 @@ extension AppTrackingService {
         override func eventDidReachThreshold(_ event: DeviceActivityEvent.Name, activity: DeviceActivityName) {
             super.eventDidReachThreshold(event, activity: activity)
             
-            // Handle threshold events
-            guard let user = AuthenticationService.shared.currentUser else {
-                return
-            }
+            // TODO: Replace with SupabaseAuthService when fully implemented
+            // Note: AuthenticationService is deprecated
+            print("Event threshold reached for: \(event)")
             
-            AppTrackingService.shared.restrictApps(for: user)
+            // Original implementation commented out:
+            // guard let user = AuthenticationService.shared.currentUser else {
+            //     return
+            // }
+            // AppTrackingService.shared.restrictApps(for: user)
         }
     }
 }
