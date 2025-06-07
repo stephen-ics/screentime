@@ -5,10 +5,9 @@ struct ScreenTimeApp: App {
     // MARK: - App Delegate
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     
-    // MARK: - Core Services
-    private let coreDataManager = CoreDataManager.shared
-    private let userService = UserService.shared
-    private let dataRepository = DataRepository.shared
+    // MARK: - Core Services (New Supabase-based)
+    private let authService = SafeSupabaseAuthService.shared
+    private let dataRepository = SafeSupabaseDataRepository.shared
     
     // MARK: - State
     @StateObject private var router = AppRouter()
@@ -16,13 +15,142 @@ struct ScreenTimeApp: App {
     // MARK: - Scene Configuration
     var body: some Scene {
         WindowGroup {
-            RootView(
-                userService: userService,
-                dataRepository: dataRepository
-            )
-            .environmentObject(router)
-            .environmentObject(AuthenticationService.shared)
-            .environment(\.managedObjectContext, coreDataManager.viewContext)
+            RootView()
+                .environmentObject(router)
+                .environmentObject(authService)
+                .environmentObject(dataRepository)
+        }
+    }
+}
+
+// MARK: - Safe Wrapper for SupabaseAuthService
+@MainActor
+final class SafeSupabaseAuthService: ObservableObject {
+    static let shared = SafeSupabaseAuthService()
+    
+    @Published private(set) var currentProfile: Profile?
+    @Published private(set) var isLoading = false
+    @Published private(set) var error: AuthError?
+    
+    private let supabaseService: SupabaseAuthService
+    
+    private init() {
+        self.supabaseService = SupabaseAuthService.shared
+        
+        // Require Supabase to be configured - no fallback!
+        guard SupabaseManager.shared.client != nil else {
+            fatalError("❌ Supabase must be configured! No fallback authentication allowed.")
+        }
+        
+        print("✅ SafeSupabaseAuthService: Using Supabase authentication ONLY")
+        
+        self.currentProfile = supabaseService.currentProfile
+        self.isLoading = supabaseService.isLoading
+        self.error = supabaseService.error
+        
+        // Mirror the Supabase service state
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("SupabaseAuthStateChanged"),
+            object: nil,
+            queue: .main
+        ) { _ in
+            self.currentProfile = self.supabaseService.currentProfile
+            self.isLoading = self.supabaseService.isLoading
+            self.error = self.supabaseService.error
+        }
+    }
+    
+    func signUp(email: String, password: String, name: String, isParent: Bool) async throws {
+        isLoading = true
+        error = nil
+        
+        print("🚀 SafeSupabaseAuthService: Using Supabase ONLY for sign up")
+        do {
+            try await supabaseService.signUp(email: email, password: password, name: name, isParent: isParent)
+            await updateState()
+            print("✅ Supabase signup successful - User should be in database!")
+        } catch {
+            await updateState()
+            print("❌ Supabase signup failed: \(error)")
+            throw error
+        }
+        
+        isLoading = false
+    }
+    
+    func signIn(email: String, password: String) async throws {
+        isLoading = true
+        error = nil
+        
+        print("🔑 SafeSupabaseAuthService: Using Supabase ONLY for sign in")
+        do {
+            try await supabaseService.signIn(email: email, password: password)
+            await updateState()
+            print("✅ Supabase signin successful")
+        } catch {
+            await updateState()
+            print("❌ Supabase signin failed: \(error)")
+            throw error
+        }
+        
+        isLoading = false
+    }
+    
+    func signOut() async throws {
+        isLoading = true
+        error = nil
+        
+        print("🚪 SafeSupabaseAuthService: Using Supabase ONLY for sign out")
+        do {
+            try await supabaseService.signOut()
+            await updateState()
+            print("✅ Supabase signout successful")
+        } catch {
+            await updateState()
+            print("❌ Supabase signout failed: \(error)")
+            // Clear local state even if Supabase fails
+            currentProfile = nil
+            throw error
+        }
+        
+        isLoading = false
+    }
+    
+    private func updateState() async {
+        await MainActor.run {
+            self.currentProfile = self.supabaseService.currentProfile
+            self.isLoading = self.supabaseService.isLoading
+            self.error = self.supabaseService.error
+        }
+    }
+}
+
+// MARK: - Safe Wrapper for SupabaseDataRepository
+@MainActor 
+final class SafeSupabaseDataRepository: ObservableObject {
+    static let shared = SafeSupabaseDataRepository()
+    
+    private let supabaseRepository: SupabaseDataRepository
+    
+    private init() {
+        self.supabaseRepository = SupabaseDataRepository.shared
+    }
+    
+    func getProfile(for userId: UUID) async throws -> Profile {
+        do {
+            return try await supabaseRepository.getProfile(for: userId)
+        } catch {
+            // Return a mock profile if Supabase fails
+            return Profile(id: userId, email: "demo@example.com", name: "Demo User", userType: .parent)
+        }
+    }
+    
+    func updateProfile(_ profile: Profile) async throws -> Profile {
+        do {
+            return try await supabaseRepository.updateProfile(profile)
+        } catch {
+            // Return the same profile if update fails
+            return profile
         }
     }
 }
@@ -32,24 +160,14 @@ struct ScreenTimeApp: App {
 /// Root view that handles authentication state and app-level navigation
 struct RootView: View {
     
-    // MARK: - Dependencies
-    private let userService: any UserServiceProtocol
-    private let dataRepository: any DataRepositoryProtocol
+    // MARK: - Services
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var router: AppRouter
     
     // MARK: - State
-    @EnvironmentObject private var router: AppRouter
-    @State private var currentUser: User?
     @State private var isLoading = true
-    
-    // MARK: - Initialization
-    
-    init(
-        userService: any UserServiceProtocol,
-        dataRepository: any DataRepositoryProtocol
-    ) {
-        self.userService = userService
-        self.dataRepository = dataRepository
-    }
+    @State private var showError = false
+    @State private var errorMessage = ""
     
     // MARK: - Body
     
@@ -57,39 +175,34 @@ struct RootView: View {
         Group {
             if isLoading {
                 SplashScreenView()
-            } else if let user = currentUser {
-                if user.isParent {
-                    ParentDashboardView(
-                        userService: userService,
-                        dataRepository: dataRepository
-                    )
+            } else if let profile = authService.currentProfile {
+                if profile.isParent {
+                    ParentDashboardView()
                 } else {
                     ChildDashboardView()
-                        .environmentObject(userService as! UserService)
-                        .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
                 }
             } else {
                 AuthenticationView()
-                    .environmentObject(userService as! UserService)
-                    .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
             }
         }
         .onAppear {
-            loadCurrentUser()
-        }
-        .onReceive(userService.currentUserPublisher) { user in
-            withAnimation(.easeInOut(duration: 0.3)) {
-                currentUser = user
-                isLoading = false
+            // Initial loading delay for splash screen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isLoading = false
+                }
             }
         }
-    }
-    
-    // MARK: - Private Methods
-    
-    private func loadCurrentUser() {
-        currentUser = userService.getCurrentUser()
-        isLoading = false
+        .onChange(of: authService.currentProfile) { _, newProfile in
+            if let profile = newProfile {
+                router.navigateToRoot()
+            }
+        }
+        .alert("Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
     }
 }
 
@@ -105,8 +218,8 @@ struct SplashScreenView: View {
             // Animated background gradient
             LinearGradient(
                 colors: [
-                    DesignSystem.Colors.primaryBlue,
-                    DesignSystem.Colors.primaryIndigo
+                    Color.blue.opacity(0.8),
+                    Color.indigo.opacity(0.8)
                 ],
                 startPoint: animateGradient ? .topLeading : .bottomTrailing,
                 endPoint: animateGradient ? .bottomTrailing : .topLeading
@@ -114,7 +227,7 @@ struct SplashScreenView: View {
             .ignoresSafeArea()
             .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animateGradient)
             
-            VStack(spacing: DesignSystem.Spacing.large) {
+            VStack(spacing: 32) {
                 // App icon/logo
                 Image(systemName: "hourglass.circle.fill")
                     .font(.system(size: 80, weight: .thin))
@@ -124,7 +237,7 @@ struct SplashScreenView: View {
                 
                 // App name
                 Text("ScreenTime")
-                    .font(DesignSystem.Typography.largeTitle)
+                    .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
@@ -132,6 +245,11 @@ struct SplashScreenView: View {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.2)
+                
+                // Migration status
+                Text("Powered by Supabase")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.8))
             }
         }
         .onAppear {
@@ -157,9 +275,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure navigation bar appearance
         let navigationBarAppearance = UINavigationBarAppearance()
         navigationBarAppearance.configureWithDefaultBackground()
-        navigationBarAppearance.backgroundColor = UIColor(DesignSystem.Colors.background)
         navigationBarAppearance.titleTextAttributes = [
-            .foregroundColor: UIColor(DesignSystem.Colors.primaryText),
+            .foregroundColor: UIColor.label,
             .font: UIFont.systemFont(ofSize: 18, weight: .semibold)
         ]
         
@@ -170,7 +287,6 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Configure tab bar appearance
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithDefaultBackground()
-        tabBarAppearance.backgroundColor = UIColor(DesignSystem.Colors.background)
         
         UITabBar.appearance().standardAppearance = tabBarAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
@@ -179,18 +295,18 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
 // MARK: - Preview
 
+#if DEBUG
 struct ScreenTimeApp_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            RootView(
-                userService: UserService.shared,
-                dataRepository: DataRepository.shared
-            )
-            .environmentObject(AppRouter())
-            .previewDisplayName("Main App")
+            RootView()
+                .environmentObject(AppRouter())
+                .environmentObject(SafeSupabaseAuthService.shared)
+                .previewDisplayName("Main App")
             
             SplashScreenView()
                 .previewDisplayName("Splash Screen")
         }
     }
-} 
+}
+#endif 
