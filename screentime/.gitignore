@@ -164,4 +164,8 @@ __pycache__/
 *.p12
 *.cer
 *.mobileprovision
-*.provisionprofile 
+*.provisionprofile
+
+# Supabase Configuration
+SupabaseConfig.plist
+Resources/SupabaseConfig.plist 
