@@ -1,10 +1,10 @@
 import Foundation
 
 /// Approved app model for Supabase backend
-final class SupabaseApprovedApp: Codable, Identifiable, Hashable, Sendable, ObservableObject {
+struct SupabaseApprovedApp: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     let createdAt: Date
-    @Published var updatedAt: Date
+    var updatedAt: Date
     var name: String
     var bundleIdentifier: String
     var isEnabled: Bool
@@ -24,7 +24,9 @@ final class SupabaseApprovedApp: Codable, Identifiable, Hashable, Sendable, Obse
     }
     
     // MARK: - Computed Properties
-    var dailyLimitMinutes: Int32?
+    var dailyLimitMinutes: Int32 {
+        Int32(dailyLimitSeconds / 60)
+    }
     
     var formattedDailyLimit: String {
         guard dailyLimitSeconds > 0 else {
@@ -159,30 +161,40 @@ final class SupabaseApprovedApp: Codable, Identifiable, Hashable, Sendable, Obse
         }
     }
     
-    // MARK: - App Management Methods
-    func enable() {
-        isEnabled = true
-        updatedAt = Date()
+    // MARK: - Mutation Methods (for struct immutability)
+    func enabling() -> SupabaseApprovedApp {
+        var updated = self
+        updated.isEnabled = true
+        updated.updatedAt = Date()
+        return updated
     }
     
-    func disable() {
-        isEnabled = false
-        updatedAt = Date()
+    func disabling() -> SupabaseApprovedApp {
+        var updated = self
+        updated.isEnabled = false
+        updated.updatedAt = Date()
+        return updated
     }
     
-    func setDailyLimit(minutes: Int32) {
-        dailyLimitSeconds = Double(minutes * 60)
-        updatedAt = Date()
+    func settingDailyLimit(minutes: Int32) -> SupabaseApprovedApp {
+        var updated = self
+        updated.dailyLimitSeconds = Double(minutes * 60)
+        updated.updatedAt = Date()
+        return updated
     }
     
-    func removeDailyLimit() {
-        dailyLimitSeconds = 0
-        updatedAt = Date()
+    func removingDailyLimit() -> SupabaseApprovedApp {
+        var updated = self
+        updated.dailyLimitSeconds = 0
+        updated.updatedAt = Date()
+        return updated
     }
     
-    func updateName(_ newName: String) {
-        name = newName
-        updatedAt = Date()
+    func updatingName(_ newName: String) -> SupabaseApprovedApp {
+        var updated = self
+        updated.name = newName
+        updated.updatedAt = Date()
+        return updated
     }
 }
 

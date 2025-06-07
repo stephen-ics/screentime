@@ -1,7 +1,7 @@
 import Foundation
 
 /// User profile model for Supabase backend
-final class Profile: Codable, Identifiable, Hashable, Sendable, ObservableObject {
+struct Profile: Codable, Identifiable, Hashable, Sendable {
     let id: UUID
     var email: String
     var name: String
@@ -113,6 +113,21 @@ final class Profile: Codable, Identifiable, Hashable, Sendable, ObservableObject
                 return NSLocalizedString("Name cannot exceed 100 characters", comment: "")
             }
         }
+    }
+    
+    // MARK: - Mutation Methods (for struct immutability)
+    func updatingName(_ newName: String) -> Profile {
+        var updated = self
+        updated.name = newName
+        updated.updatedAt = Date()
+        return updated
+    }
+    
+    func updatingEmail(_ newEmail: String) -> Profile {
+        var updated = self
+        updated.email = newEmail
+        updated.updatedAt = Date()
+        return updated
     }
 }
 
