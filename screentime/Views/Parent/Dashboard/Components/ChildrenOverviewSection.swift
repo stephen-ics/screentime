@@ -4,15 +4,15 @@ import SwiftUI
 struct ChildrenOverviewSection: View {
     
     // MARK: - Properties
-    let children: [User]
-    let onChildTapped: (User) -> Void
+    let children: [Profile]
+    let onChildTapped: (Profile) -> Void
     let onSeeAllTapped: () -> Void
     
     // MARK: - Initialization
     
     init(
-        children: [User],
-        onChildTapped: @escaping (User) -> Void,
+        children: [Profile],
+        onChildTapped: @escaping (Profile) -> Void,
         onSeeAllTapped: @escaping () -> Void
     ) {
         self.children = children
@@ -24,168 +24,122 @@ struct ChildrenOverviewSection: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            sectionHeader
-            childrenGrid
-        }
-    }
-    
-    // MARK: - Private Views
-    
-    @ViewBuilder
-    private var sectionHeader: some View {
-        HStack {
-            Text("Your Children")
-                .font(DesignSystem.Typography.title3)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-                .fontWeight(.semibold)
-            
-            Spacer()
-            
-            Button("See All") {
-                onSeeAllTapped()
-            }
-            .font(DesignSystem.Typography.callout)
-            .fontWeight(.medium)
-            .foregroundColor(DesignSystem.Colors.primaryBlue)
-        }
-    }
-    
-    @ViewBuilder
-    private var childrenGrid: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: DesignSystem.Spacing.medium) {
-                ForEach(Array(children.prefix(3).enumerated()), id: \.element.id) { index, child in
-                    ChildOverviewCard(child: child) {
-                        onChildTapped(child)
+            // Header
+            HStack {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxxSmall) {
+                    Text("Your Children")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                    
+                    if children.isEmpty {
+                        Text("No children linked yet")
+                            .font(.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                    } else {
+                        Text("\(children.count) child\(children.count == 1 ? "" : "ren") linked")
+                            .font(.caption)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
                     }
-                    .scaleEffect(1.0)
-                    .animation(.easeInOut(duration: 0.2).delay(Double(index) * 0.1), value: children.count)
+                }
+                
+                Spacer()
+                
+                Button(action: onSeeAllTapped) {
+                    Text("See All")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(DesignSystem.Colors.primaryBlue)
                 }
             }
-            .padding(.horizontal, 1) // Prevent shadow clipping
+            
+            // Content
+            if children.isEmpty {
+                emptyState
+            } else {
+                childrenScrollView
+            }
+        }
+        .padding(DesignSystem.Spacing.medium)
+        .background(DesignSystem.Colors.secondaryBackground)
+        .cornerRadius(DesignSystem.Spacing.medium)
+        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+    }
+    
+    @ViewBuilder
+    private var childrenScrollView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: DesignSystem.Spacing.medium) {
+                ForEach(children, id: \.id) { child in
+                    ChildCard(child: child) {
+                        onChildTapped(child)
+                    }
+                }
+            }
+            .padding(.horizontal, 2) // Small padding for shadow
+        }
+    }
+    
+    @ViewBuilder
+    private var emptyState: some View {
+        VStack(spacing: DesignSystem.Spacing.small) {
+            Text("No children linked yet")
+                .font(.caption)
+                .foregroundColor(DesignSystem.Colors.secondaryText)
         }
     }
 }
 
-// MARK: - Child Overview Card
-
-/// Individual child overview card component
-struct ChildOverviewCard: View {
-    
-    // MARK: - Properties
-    let child: User
+// MARK: - Child Card Component
+struct ChildCard: View {
+    let child: Profile
     let onTap: () -> Void
     
-    // MARK: - Body
-    
     var body: some View {
-        BaseCard(style: .compact, action: onTap) {
+        Button(action: onTap) {
             VStack(spacing: DesignSystem.Spacing.small) {
-                childAvatar
-                childInfo
+                // Avatar
+                Circle()
+                    .fill(LinearGradient.childGradient)
+                    .frame(width: 50, height: 50)
+                    .overlay(
+                        Text(String(child.name.prefix(1)).uppercased())
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    )
+                
+                // Name
+                Text(child.name)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(DesignSystem.Colors.primaryText)
+                    .lineLimit(1)
+                
+                // Status indicator
+                Text("Active")
+                    .font(.caption2)
+                    .foregroundColor(DesignSystem.Colors.success)
             }
-            .frame(width: 100)
+            .padding(DesignSystem.Spacing.small)
+            .background(DesignSystem.Colors.background)
+            .cornerRadius(DesignSystem.CornerRadius.medium)
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
         }
+        .buttonStyle(ScaleButtonStyle())
     }
-    
-    // MARK: - Private Views
-    
-    @ViewBuilder
-    private var childAvatar: some View {
-        Circle()
-            .fill(avatarGradient)
-            .frame(width: 60, height: 60)
-            .overlay(
-                Text(childInitials)
-                    .font(DesignSystem.Typography.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-            )
-    }
-    
-    @ViewBuilder
-    private var childInfo: some View {
-        VStack(spacing: DesignSystem.Spacing.xxSmall) {
-            Text(child.name)
-                .font(DesignSystem.Typography.callout)
-                .fontWeight(.semibold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            
-            if let balance = child.screenTimeBalance {
-                screenTimeInfo(balance)
-            } else {
-                Text("No screen time")
-                    .font(DesignSystem.Typography.caption2)
-                    .foregroundColor(DesignSystem.Colors.tertiaryText)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func screenTimeInfo(_ balance: ScreenTimeBalance) -> some View {
-        VStack(spacing: 2) {
-            Text(balance.formattedTimeRemaining)
-                .font(DesignSystem.Typography.caption1)
-                .fontWeight(.medium)
-                .foregroundColor(timeRemainingColor(balance))
-            
-            if balance.isTimerActive {
-                HStack(spacing: 2) {
-                    Circle()
-                        .fill(DesignSystem.Colors.success)
-                        .frame(width: 6, height: 6)
-                    
-                    Text("Active")
-                        .font(DesignSystem.Typography.caption2)
-                        .foregroundColor(DesignSystem.Colors.success)
-                }
-            }
-        }
-    }
-    
-    // MARK: - Computed Properties
-    
-    private var childInitials: String {
-        let components = child.name.components(separatedBy: " ")
-        if components.count >= 2 {
-            return String(components[0].prefix(1) + components[1].prefix(1))
-        } else {
-            return String(child.name.prefix(2))
-        }
-    }
-    
-    private var avatarGradient: LinearGradient {
-        // Create a consistent gradient based on the child's name
-        let hash = child.name.hashValue
-        let colors = [
-            (DesignSystem.Colors.primaryBlue, DesignSystem.Colors.primaryIndigo),
-            (DesignSystem.Colors.success, Color.green),
-            (DesignSystem.Colors.warning, Color.orange),
-            (Color.purple, Color.pink),
-            (Color.teal, Color.cyan)
-        ]
-        
-        let colorPair = colors[abs(hash) % colors.count]
-        return LinearGradient(
-            colors: [colorPair.0, colorPair.1],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+}
+
+// MARK: - Previews
+struct ChildrenOverviewSection_Previews: PreviewProvider {
+    static var previews: some View {
+        ChildrenOverviewSection(
+            children: [Profile.mockChild],
+            onChildTapped: { _ in },
+            onSeeAllTapped: { }
         )
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func timeRemainingColor(_ balance: ScreenTimeBalance) -> Color {
-        let remaining = balance.availableMinutes
-        if remaining <= 15 {
-            return DesignSystem.Colors.error
-        } else if remaining <= 60 {
-            return DesignSystem.Colors.warning
-        } else {
-            return DesignSystem.Colors.secondaryText
-        }
+        .padding()
+        .previewLayout(.sizeThatFits)
     }
 }
 
@@ -197,38 +151,9 @@ extension ChildrenOverviewSection: Equatable {
     }
 }
 
-extension ChildOverviewCard: Equatable {
-    static func == (lhs: ChildOverviewCard, rhs: ChildOverviewCard) -> Bool {
-        lhs.child.id == rhs.child.id &&
-        lhs.child.screenTimeBalance?.availableMinutes == rhs.child.screenTimeBalance?.availableMinutes &&
-        lhs.child.screenTimeBalance?.isTimerActive == rhs.child.screenTimeBalance?.isTimerActive
-    }
-}
-
-// MARK: - Preview
-
-struct ChildrenOverviewSection_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack(spacing: 30) {
-            ChildrenOverviewSection(
-                children: User.mockChildren,
-                onChildTapped: { child in
-                    print("Tapped child: \(child.name)")
-                },
-                onSeeAllTapped: {
-                    print("See all tapped")
-                }
-            )
-            
-            ChildrenOverviewSection(
-                children: [],
-                onChildTapped: { _ in },
-                onSeeAllTapped: { }
-            )
-        }
-        .padding()
-        .background(DesignSystem.Colors.groupedBackground)
-        .previewLayout(.sizeThatFits)
+extension ChildCard: Equatable {
+    static func == (lhs: ChildCard, rhs: ChildCard) -> Bool {
+        lhs.child.id == rhs.child.id
     }
 }
 
