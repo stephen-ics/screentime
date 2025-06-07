@@ -61,12 +61,17 @@ final class AppRouter: RouterProtocol {
 
 /// Represents navigation destinations within the app
 enum NavigationDestination: Hashable {
-    case childDetail(User)
-    case taskDetail(Task)
+    case childDetail(Profile)
+    case taskDetail(SupabaseTask)
+    case timeRequests
+    case analytics
+    case tasks
     case settings
-    case editProfile
-    case timeRequestDetail(TimeRequest)
+    case account
+    case addTask
+    case editChild(Profile)
     case reports
+    case approvedApps
 }
 
 /// Represents sheet modal destinations
@@ -75,8 +80,11 @@ enum SheetDestination: Identifiable {
     case addTask
     case timeRequests
     case settings
+    case account
     case editProfile
     case changePassword
+    case addApprovedApp
+    case supabaseSetup
     
     var id: String {
         switch self {
@@ -84,8 +92,11 @@ enum SheetDestination: Identifiable {
         case .addTask: return "addTask"
         case .timeRequests: return "timeRequests"
         case .settings: return "settings"
+        case .account: return "account"
         case .editProfile: return "editProfile"
         case .changePassword: return "changePassword"
+        case .addApprovedApp: return "addApprovedApp"
+        case .supabaseSetup: return "supabaseSetup"
         }
     }
 }
@@ -95,12 +106,14 @@ enum FullScreenDestination: Identifiable {
     case authentication
     case onboarding
     case parentalControls
+    case migrationComplete
     
     var id: String {
         switch self {
         case .authentication: return "authentication"
         case .onboarding: return "onboarding"
         case .parentalControls: return "parentalControls"
+        case .migrationComplete: return "migrationComplete"
         }
     }
 }
