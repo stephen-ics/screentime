@@ -9,7 +9,9 @@ final class SharedDataManager: @unchecked Sendable {
     // MARK: - Properties
     private var users: [String: User] = [:] // Email -> User mapping
     private var parentChildLinks: [String: String] = [:] // Child email -> Parent email
-    private var pendingTimeRequests: [String: TimeRequest] = [:] // Request ID -> TimeRequest
+    
+    // Note: Temporarily using a simple storage approach for time requests during transition to Supabase
+    private var pendingTimeRequests: [String: [String: Any]] = [:] // Simplified storage during migration
     private let updateSubject = PassthroughSubject<DataUpdateEvent, Never>()
     
     // Use standard UserDefaults for now (in production, use app groups)
@@ -39,10 +41,9 @@ final class SharedDataManager: @unchecked Sendable {
             print("Loaded parent-child links: \(parentChildLinks)")
         }
         
-        // Load pending requests
-        if let requestsData = defaults.data(forKey: Constants.pendingRequestsKey),
-           let requests = try? JSONDecoder().decode([String: TimeRequest].self, from: requestsData) {
-            pendingTimeRequests = requests
+        // Load pending requests (simplified during migration)
+        if let requestsData = defaults.object(forKey: Constants.pendingRequestsKey) as? [String: [String: Any]] {
+            pendingTimeRequests = requestsData
         }
         
         // Load registered users
@@ -52,19 +53,11 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     private func loadUsersFromCoreData() {
-        // Load all users from Core Data
-        let request = User.fetchRequest()
-        if let allUsers = try? CoreDataManager.shared.fetch(request) {
-            for user in allUsers {
-                if let email = user.email {
-                    users[email.lowercased()] = user
-                    print("Loaded user from CoreData: \(user.name) with email: \(email) (isParent: \(user.isParent))")
-                }
-            }
-        }
-        print("Total users loaded from CoreData: \(users.count)")
+        // During transition: simplified user loading
+        // In production: use SupabaseDataRepository to load users
+        print("Loading users simplified for transition period")
         
-        // Also check UserDefaults for registered users
+        // Check UserDefaults for registered users
         if let registeredEmails = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
             print("Registered emails in UserDefaults: \(registeredEmails)")
         }
@@ -77,10 +70,8 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     private func savePendingRequests() {
-        if let data = try? JSONEncoder().encode(pendingTimeRequests) {
-            defaults.set(data, forKey: Constants.pendingRequestsKey)
-            defaults.synchronize()
-        }
+        defaults.set(pendingTimeRequests, forKey: Constants.pendingRequestsKey)
+        defaults.synchronize()
     }
     
     private func saveRegisteredUsers() {
@@ -136,15 +127,8 @@ final class SharedDataManager: @unchecked Sendable {
             return user
         }
         
-        // If not found, try to fetch from Core Data with case-insensitive search
-        let request = User.fetchRequest()
-        request.predicate = NSPredicate(format: "email ==[c] %@", email)
-        
-        if let user = try? CoreDataManager.shared.fetch(request).first {
-            users[normalizedEmail] = user
-            print("Found user in CoreData: \(user.name)")
-            return user
-        }
+        // During transition: simplified user lookup
+        // In production: use SupabaseDataRepository
         
         // Check if user is registered on another device
         if let registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String],
@@ -184,12 +168,8 @@ final class SharedDataManager: @unchecked Sendable {
             
             print("Successfully linked child \(normalizedChildEmail) to parent \(normalizedParentEmail)")
             
-            // Update Core Data relationships if child is available locally
-            if let child = findUser(byEmail: normalizedChildEmail) {
-                child.parent = parent
-                parent.children.insert(child)
-                try? CoreDataManager.shared.save()
-            }
+            // During transition: skip Core Data relationship updates
+            // In production: use SupabaseDataRepository
             
             updateSubject.send(.childLinked(childEmail: normalizedChildEmail, parentEmail: normalizedParentEmail))
             return true
@@ -221,17 +201,17 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     // MARK: - Task Management
-    func notifyTaskAssigned(_ task: Task, toChildEmail childEmail: String) {
+    func notifyTaskAssigned(_ task: SupabaseTask, toChildEmail childEmail: String) {
         updateSubject.send(.taskAssigned(task: task, childEmail: childEmail))
     }
     
-    func notifyTaskCompleted(_ task: Task, byChildEmail childEmail: String) {
+    func notifyTaskCompleted(_ task: SupabaseTask, byChildEmail childEmail: String) {
         if let parentEmail = getParentEmail(forChildEmail: childEmail) {
             updateSubject.send(.taskCompleted(task: task, childEmail: childEmail, parentEmail: parentEmail))
         }
     }
     
-    // MARK: - Time Management
+    // MARK: - Time Management (Simplified during migration to Supabase)
     func requestMoreTime(fromChildEmail childEmail: String, minutes: Int32) -> String? {
         guard let parentEmail = getParentEmail(forChildEmail: childEmail) else {
             print("No parent linked for child: \(childEmail)")
@@ -239,49 +219,60 @@ final class SharedDataManager: @unchecked Sendable {
         }
         
         let requestId = UUID().uuidString
-        let request = TimeRequest(
-            id: requestId,
-            childEmail: childEmail,
-            parentEmail: parentEmail,
-            requestedMinutes: minutes,
-            timestamp: Date()
-        )
+        let requestData: [String: Any] = [
+            "id": requestId,
+            "childEmail": childEmail,
+            "parentEmail": parentEmail,
+            "requestedMinutes": minutes,
+            "timestamp": Date().timeIntervalSince1970
+        ]
         
-        pendingTimeRequests[requestId] = request
+        pendingTimeRequests[requestId] = requestData
         savePendingRequests()
-        updateSubject.send(.timeRequested(request: request))
+        
+        // Create a simplified event for backwards compatibility
+        updateSubject.send(.timeRequested(requestId: requestId, childEmail: childEmail, parentEmail: parentEmail, minutes: minutes))
         
         print("Created time request from \(childEmail) to \(parentEmail)")
         return requestId
     }
     
-    func getPendingRequests(forParentEmail parentEmail: String) -> [TimeRequest] {
-        return pendingTimeRequests.values.filter { $0.parentEmail.lowercased() == parentEmail.lowercased() }
+    func getPendingRequests(forParentEmail parentEmail: String) -> [[String: Any]] {
+        return pendingTimeRequests.values.filter { 
+            if let parentEmailFromRequest = $0["parentEmail"] as? String {
+                return parentEmailFromRequest.lowercased() == parentEmail.lowercased()
+            }
+            return false
+        }
     }
     
     func approveTimeRequest(_ requestId: String) -> Bool {
-        guard let request = pendingTimeRequests[requestId],
-              let child = findUser(byEmail: request.childEmail) else {
+        guard let requestData = pendingTimeRequests[requestId],
+              let childEmail = requestData["childEmail"] as? String,
+              let minutes = requestData["requestedMinutes"] as? Int32 else {
             return false
         }
         
-        child.screenTimeBalance?.addTime(request.requestedMinutes)
-        try? CoreDataManager.shared.save()
+        // During transition: simplified time addition
+        // In production: use SupabaseDataRepository to add time to balance
+        print("Approving time request: \(minutes) minutes for \(childEmail)")
         
         pendingTimeRequests.removeValue(forKey: requestId)
         savePendingRequests()
-        updateSubject.send(.timeApproved(request: request))
+        updateSubject.send(.timeApproved(requestId: requestId, childEmail: childEmail, minutes: minutes))
         
         return true
     }
     
     func denyTimeRequest(_ requestId: String) -> Bool {
-        guard let request = pendingTimeRequests.removeValue(forKey: requestId) else {
+        guard let requestData = pendingTimeRequests.removeValue(forKey: requestId),
+              let childEmail = requestData["childEmail"] as? String,
+              let minutes = requestData["requestedMinutes"] as? Int32 else {
             return false
         }
         
         savePendingRequests()
-        updateSubject.send(.timeDenied(request: request))
+        updateSubject.send(.timeDenied(requestId: requestId, childEmail: childEmail, minutes: minutes))
         return true
     }
     
@@ -290,32 +281,14 @@ final class SharedDataManager: @unchecked Sendable {
     }
 }
 
-// MARK: - Data Models
-struct TimeRequest: Codable, Hashable, Equatable {
-    let id: String
-    let childEmail: String
-    let parentEmail: String
-    let requestedMinutes: Int32
-    let timestamp: Date
-    
-    // MARK: - Hashable
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
-    
-    // MARK: - Equatable
-    static func == (lhs: TimeRequest, rhs: TimeRequest) -> Bool {
-        return lhs.id == rhs.id
-    }
-}
-
+// MARK: - Data Update Events
 enum DataUpdateEvent {
     case userRegistered(email: String)
     case childLinked(childEmail: String, parentEmail: String)
-    case taskAssigned(task: Task, childEmail: String)
-    case taskCompleted(task: Task, childEmail: String, parentEmail: String)
-    case timeRequested(request: TimeRequest)
-    case timeApproved(request: TimeRequest)
-    case timeDenied(request: TimeRequest)
+    case taskAssigned(task: SupabaseTask, childEmail: String)
+    case taskCompleted(task: SupabaseTask, childEmail: String, parentEmail: String)
+    case timeRequested(requestId: String, childEmail: String, parentEmail: String, minutes: Int32)
+    case timeApproved(requestId: String, childEmail: String, minutes: Int32)
+    case timeDenied(requestId: String, childEmail: String, minutes: Int32)
     case screenTimeUpdated(childEmail: String, minutes: Int32)
 } 
