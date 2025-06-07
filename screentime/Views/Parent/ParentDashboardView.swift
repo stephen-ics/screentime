@@ -5,33 +5,22 @@ import _Concurrency
 /// Main parent dashboard view with proper MVVM architecture and dependency injection
 struct ParentDashboardView: View {
     
-    // MARK: - Dependencies
-    private let userService: any UserServiceProtocol
-    private let dataRepository: DataRepositoryProtocol
+    // MARK: - Environment Objects
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var dataRepository: SafeSupabaseDataRepository
+    @EnvironmentObject private var router: AppRouter
     
     // MARK: - State
-    @StateObject private var router = AppRouter()
     @StateObject private var viewModel: ParentDashboardViewModel
-    
-    // MARK: - Environment
-    @Environment(\.managedObjectContext) private var viewContext
     
     // MARK: - Initialization
     
-    init(
-        userService: any UserServiceProtocol = UserService.shared,
-        dataRepository: DataRepositoryProtocol = DataRepository.shared
-    ) {
-        self.userService = userService
-        self.dataRepository = dataRepository
-        
-        // Create router and view model
-        let tempRouter = AppRouter()
-        self._router = StateObject(wrappedValue: tempRouter)
+    init() {
+        // Initialize with placeholder values - will be updated when environment objects are available
         self._viewModel = StateObject(wrappedValue: ParentDashboardViewModel(
-            userService: userService,
-            dataRepository: dataRepository,
-            router: tempRouter
+            userService: UserService(),
+            dataRepository: DataRepository(),
+            router: AppRouter()
         ))
     }
     
@@ -44,31 +33,87 @@ struct ParentDashboardView: View {
                     destinationView(for: destination)
                 }
         }
-        .environmentObject(router)
         .onAppear {
+            // Update view model with actual environment objects
+            viewModel.updateDependencies(
+                authService: authService,
+                dataRepository: dataRepository,
+                router: router
+            )
             viewModel.loadData()
+        }
+        .sheet(item: $router.presentedSheet) { destination in
+            sheetView(for: destination)
+        }
+        .fullScreenCover(item: $router.presentedFullScreen) { destination in
+            modalView(for: destination)
         }
     }
     
     @ViewBuilder
     private func destinationView(for destination: NavigationDestination) -> some View {
         switch destination {
-        case .childDetail(let user):
-            Text("Child Detail for \(user.name)")
-                .navigationTitle(user.name)
-        case .taskDetail(_):
-            Text("Task Detail")
-                .navigationTitle("Task")
+        case .childDetail(let child):
+            ChildDetailView(child: child)
+        case .taskDetail(let task):
+            Text("Task Detail: \(task.title)")
+        case .timeRequests:
+            TimeRequestsView()
+        case .analytics:
+            AnalyticsView()
+        case .tasks:
+            TaskListView()
         case .settings:
             SettingsView()
-        case .editProfile:
-            Text("Edit Profile - Coming Soon")
-                .navigationTitle("Edit Profile")
-        case .timeRequestDetail(_):
-            Text("Time Request Detail")
-                .navigationTitle("Request")
+        case .account:
+            AccountView()
+        case .addTask:
+            AddTaskView()
+        case .editChild(let child):
+            // Placeholder for missing EditChildView
+            Text("Edit Child: \(child.name)")
         case .reports:
-            ReportsView()
+            AnalyticsView()
+        case .approvedApps:
+            ApprovedAppsView(child: Profile.mockChild)
+        }
+    }
+    
+    @ViewBuilder
+    private func sheetView(for destination: SheetDestination) -> some View {
+        switch destination {
+        case .addChild:
+            AddChildView()
+        case .addTask:
+            AddTaskView()
+        case .timeRequests:
+            TimeRequestsView()
+        case .settings:
+            SettingsView()
+        case .account:
+            AccountView()
+        case .editProfile:
+            EditProfileView()
+        case .changePassword:
+            Text("Change Password - Coming Soon")
+        case .addApprovedApp:
+            ApprovedAppsView(child: Profile.mockChild)
+        case .supabaseSetup:
+            Text("Supabase Setup - Coming Soon")
+        }
+    }
+    
+    @ViewBuilder
+    private func modalView(for destination: FullScreenDestination) -> some View {
+        switch destination {
+        case .authentication:
+            AuthenticationView()
+        case .onboarding:
+            Text("Onboarding - Coming Soon")
+        case .parentalControls:
+            Text("Parental Controls - Coming Soon")
+        case .migrationComplete:
+            Text("Migration Complete!")
         }
     }
 }
@@ -86,8 +131,8 @@ struct ParentDashboardView_Alternative: View {
     // MARK: - Initialization
     
     init(
-        userService: any UserServiceProtocol = UserService.shared,
-        dataRepository: DataRepositoryProtocol = DataRepository.shared
+        userService: any UserServiceProtocol = UserService(),
+        dataRepository: DataRepositoryProtocol = DataRepository()
     ) {
         self.userService = userService
         self.dataRepository = dataRepository
@@ -150,11 +195,11 @@ struct DashboardTabView: View {
             }
         }
         .sheet(item: $router.presentedSheet) { destination in
-            sheetContent(for: destination)
+            sheetView(for: destination)
                 .environmentObject(router)
         }
         .fullScreenCover(item: $router.presentedFullScreen) { destination in
-            fullScreenContent(for: destination)
+            modalView(for: destination)
                 .environmentObject(router)
         }
         .onAppear {
@@ -198,60 +243,40 @@ struct DashboardTabView: View {
     // MARK: - Sheet Content
     
     @ViewBuilder
-    private func sheetContent(for destination: SheetDestination) -> some View {
+    private func sheetView(for destination: SheetDestination) -> some View {
         switch destination {
         case .addChild:
-            NavigationView {
-                ModernAddChildView()
-                    .environmentObject(router)
-            }
-            
+            AddChildView()
         case .addTask:
-            NavigationView {
-                AddTaskView()
-                    .environmentObject(router)
-            }
-            
+            AddTaskView()
         case .timeRequests:
-            NavigationView {
-                TimeRequestsView()
-                    .environmentObject(router)
-            }
-            
+            TimeRequestsView()
         case .settings:
-            NavigationView {
-                SettingsView()
-                    .environmentObject(router)
-            }
-            
+            SettingsView()
+        case .account:
+            AccountView()
         case .editProfile:
-            NavigationView {
-                EditProfileView()
-                    .environmentObject(router)
-            }
-            
+            EditProfileView()
         case .changePassword:
-            NavigationView {
-                ChangePasswordView()
-                    .environmentObject(router)
-            }
+            Text("Change Password - Coming Soon")
+        case .addApprovedApp:
+            ApprovedAppsView(child: Profile.mockChild)
+        case .supabaseSetup:
+            Text("Supabase Setup - Coming Soon")
         }
     }
     
     @ViewBuilder
-    private func fullScreenContent(for destination: FullScreenDestination) -> some View {
+    private func modalView(for destination: FullScreenDestination) -> some View {
         switch destination {
         case .authentication:
             AuthenticationView()
-                .environmentObject(router)
-            
         case .onboarding:
             Text("Onboarding - Coming Soon")
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-            
         case .parentalControls:
             Text("Parental Controls - Coming Soon")
-                .foregroundColor(DesignSystem.Colors.secondaryText)
+        case .migrationComplete:
+            Text("Migration Complete!")
         }
     }
     
@@ -337,10 +362,10 @@ struct ChildrenListView: View {
                 
                 // Children Cards
                 ForEach(viewModel.state.linkedChildren) { child in
-                    ModernChildCard(child: child) {
+                    ModernChildCard(profile: child) {
                         viewModel.viewChildDetail(child)
                     }
-                    .padding(.horizontal, DesignSystem.Spacing.large)
+                    .padding(.horizontal, DesignSystem.Spacing.small)
                 }
             }
             .padding(.bottom, DesignSystem.Spacing.xxLarge)
@@ -385,100 +410,74 @@ struct ChildrenListView: View {
 
 /// Modern child card component with improved design
 struct ModernChildCard: View {
-    let child: User
+    let profile: Profile
     let onTap: () -> Void
     
     var body: some View {
-        BaseCard(action: onTap) {
+        Button(action: onTap) {
             HStack(spacing: DesignSystem.Spacing.medium) {
                 // Avatar
-                childAvatar
+                Circle()
+                    .fill(avatarGradient)
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Text(childInitials)
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                    )
                 
                 // Info
                 VStack(alignment: .leading, spacing: DesignSystem.Spacing.xSmall) {
-                    Text(child.name)
+                    Text(profile.name)
                         .font(DesignSystem.Typography.body)
                         .fontWeight(.semibold)
                         .foregroundColor(DesignSystem.Colors.primaryText)
                     
-                    screenTimeInfo
+                    // Placeholder for screen time info
+                    Text("Screen time data not available")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
                 
                 Spacer()
                 
-                // Chevron
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(DesignSystem.Colors.tertiaryText)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private var childAvatar: some View {
-        Circle()
-            .fill(avatarGradient)
-            .frame(width: 56, height: 56)
-            .overlay(
-                Text(childInitials)
-                    .font(DesignSystem.Typography.body)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-            )
-    }
-    
-    @ViewBuilder
-    private var screenTimeInfo: some View {
-        if let balance = child.screenTimeBalance {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: DesignSystem.Spacing.xSmall) {
-                    Image(systemName: "hourglass")
-                        .font(.system(size: 12))
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                // Status indicator
+                VStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 12, height: 12)
                     
-                    Text(balance.formattedTimeRemaining)
-                        .font(DesignSystem.Typography.caption1)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                }
-                
-                if balance.isTimerActive {
-                    HStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Circle()
-                            .fill(DesignSystem.Colors.success)
-                            .frame(width: 8, height: 8)
-                        
-                        Text("Timer Active")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundColor(DesignSystem.Colors.success)
-                    }
+                    Text("Active")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
             }
-        } else {
-            Text("No screen time set")
-                .font(DesignSystem.Typography.caption1)
-                .foregroundColor(DesignSystem.Colors.tertiaryText)
+            .padding(DesignSystem.Spacing.medium)
+            .background(
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .fill(Color(.systemGray6))
+            )
         }
+        .buttonStyle(PlainButtonStyle())
     }
     
     private var childInitials: String {
-        let components = child.name.components(separatedBy: " ")
+        let components = profile.name.components(separatedBy: " ")
         if components.count >= 2 {
             return String(components[0].prefix(1) + components[1].prefix(1))
         } else {
-            return String(child.name.prefix(2))
+            return String(profile.name.prefix(2))
         }
     }
     
     private var avatarGradient: LinearGradient {
-        let hash = child.name.hashValue
+        let hash = profile.name.hashValue
         let colors = [
             (DesignSystem.Colors.primaryBlue, DesignSystem.Colors.primaryIndigo),
-            (DesignSystem.Colors.success, Color.green),
-            (DesignSystem.Colors.warning, Color.orange),
-            (Color.purple, Color.pink),
-            (Color.teal, Color.cyan)
+            (DesignSystem.Colors.success, DesignSystem.Colors.warning),
+            (DesignSystem.Colors.warning, DesignSystem.Colors.error),
         ]
-        
         let colorPair = colors[abs(hash) % colors.count]
         return LinearGradient(
             colors: [colorPair.0, colorPair.1],
@@ -636,7 +635,7 @@ struct ModernAddChildView: View {
         isLoading = true
         
         DispatchQueue.global().async {
-            let userService = UserService.shared
+            let userService = UserService()
             let currentEmail = self.childEmail
             
             guard let parentUser = userService.getCurrentUser(),
@@ -672,7 +671,9 @@ struct ModernAddChildView: View {
 
 struct ParentDashboardView_Previews: PreviewProvider {
     static var previews: some View {
-        ParentDashboardView_Alternative()
-            .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
+        ParentDashboardView()
+            .environmentObject(AppRouter())
+            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(SafeSupabaseDataRepository.shared)
     }
 } 
