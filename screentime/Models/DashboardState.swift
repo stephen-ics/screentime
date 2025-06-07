@@ -1,9 +1,11 @@
 import Foundation
+import CoreData
 
 /// State model for the parent dashboard
 struct DashboardState {
     // MARK: - Data State
-    var linkedChildren: [User] = []
+    var linkedChildren: [Profile] = []
+    var timeRequests: [TimeRequest] = []
     var pendingRequestsCount: Int = 0
     var recentActivities: [ActivityItem] = []
     
@@ -34,7 +36,7 @@ struct DashboardState {
     }
     
     /// Preview children for the overview section (limited to 3)
-    var previewChildren: [User] {
+    var previewChildren: [Profile] {
         Array(linkedChildren.prefix(3))
     }
     
@@ -65,9 +67,9 @@ struct DashboardState {
     }
     
     /// Updates the current user information
-    mutating func updateCurrentUser(_ user: User) {
+    mutating func updateCurrentUser(_ user: Profile) {
         self.currentUserName = user.name
-        self.currentUserEmail = user.email ?? ""
+        self.currentUserEmail = user.email
     }
     
     /// Resets all state to initial values
