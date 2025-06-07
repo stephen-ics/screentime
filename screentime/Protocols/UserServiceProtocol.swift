@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreData
 
 /// Protocol defining user-related operations including authentication and user data management
 protocol UserServiceProtocol: ObservableObject {
