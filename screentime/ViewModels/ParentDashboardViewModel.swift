@@ -11,9 +11,9 @@ final class ParentDashboardViewModel: ObservableObject {
     @Published private(set) var state = DashboardState()
     
     // MARK: - Dependencies
-    private let userService: any UserServiceProtocol
-    private let dataRepository: DataRepositoryProtocol
-    private let router: any RouterProtocol
+    private var userService: any UserServiceProtocol
+    private var dataRepository: DataRepositoryProtocol
+    private var router: any RouterProtocol
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
@@ -36,6 +36,24 @@ final class ParentDashboardViewModel: ObservableObject {
     
     deinit {
         refreshTimer?.invalidate()
+    }
+    
+    // MARK: - Dependency Updates
+    
+    /// Updates the dependencies with actual environment objects
+    func updateDependencies(
+        authService: SafeSupabaseAuthService,
+        dataRepository: SafeSupabaseDataRepository,
+        router: AppRouter
+    ) {
+        // Update router
+        self.router = router
+        
+        // Clear existing bindings
+        cancellables.removeAll()
+        
+        // Re-setup bindings with new dependencies
+        setupBindings()
     }
     
     // MARK: - Public Actions
@@ -114,7 +132,7 @@ final class ParentDashboardViewModel: ObservableObject {
     
     /// Navigates to child detail view
     /// - Parameter child: The child to view details for
-    func viewChildDetail(_ child: User) {
+    func viewChildDetail(_ child: Profile) {
         router.navigate(to: .childDetail(child))
     }
     
@@ -131,7 +149,14 @@ final class ParentDashboardViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] user in
                 if let user = user {
-                    self?.state.updateCurrentUser(user)
+                    // Convert User to Profile for compatibility during migration
+                    let profile = Profile(
+                        id: UUID(), // Generate temp ID for Core Data users
+                        email: user.email ?? "",
+                        name: user.name,
+                        userType: user.isParent ? .parent : .child
+                    )
+                    self?.state.updateCurrentUser(profile)
                 } else {
                     self?.state.reset()
                 }
@@ -152,34 +177,56 @@ final class ParentDashboardViewModel: ObservableObject {
     private func setupPeriodicRefresh() {
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
             guard let self = self else { return }
-            // Trigger refresh without Task
-            self.refreshPeriodically()
+            Task { @MainActor in
+                self.refreshPeriodically()
+            }
         }
     }
     
     private func loadCurrentUser() async {
         guard let user = userService.getCurrentUser() else {
-            state.setError(UserServiceError.notAuthenticated)
+            await MainActor.run {
+                state.setError(UserServiceError.notAuthenticated)
+            }
             return
         }
         
-        state.updateCurrentUser(user)
+        // Convert User to Profile for compatibility during migration
+        let profile = Profile(
+            id: UUID(), // Generate temp ID for Core Data users
+            email: user.email ?? "",
+            name: user.name,
+            userType: user.isParent ? .parent : .child
+        )
+        
+        await MainActor.run {
+            state.updateCurrentUser(profile)
+        }
     }
     
     private func loadChildren() async {
-        guard let userEmail = userService.getCurrentUser()?.email else {
-            return
-        }
-        
-        state.isLoadingChildren = true
-        defer { state.isLoadingChildren = false }
+        guard let user = userService.getCurrentUser() else { return }
         
         do {
-            let children = try await dataRepository.getChildren(for: userEmail)
-            state.linkedChildren = children
-            state.error = nil
+            let children = try await dataRepository.getChildren(for: user.email ?? "")
+            
+            // Convert [User] to [Profile] for compatibility during migration
+            let profiles = children.map { user in
+                Profile(
+                    id: UUID(), // Generate temp ID for Core Data users
+                    email: user.email ?? "",
+                    name: user.name,
+                    userType: user.isParent ? .parent : .child
+                )
+            }
+            
+            await MainActor.run {
+                state.linkedChildren = profiles
+            }
         } catch {
-            state.setError(error)
+            await MainActor.run {
+                state.setError(error)
+            }
         }
     }
     
@@ -298,8 +345,16 @@ final class ParentDashboardViewModel: ObservableObject {
             return
         }
         
+        // Convert User to Profile for compatibility during migration
+        let profile = Profile(
+            id: UUID(), // Generate temp ID for Core Data users
+            email: user.email ?? "",
+            name: user.name,
+            userType: user.isParent ? .parent : .child
+        )
+        
         DispatchQueue.main.async { [weak self] in
-            self?.state.updateCurrentUser(user)
+            self?.state.updateCurrentUser(profile)
         }
     }
     
@@ -315,11 +370,21 @@ final class ParentDashboardViewModel: ObservableObject {
             guard let self = self else { return }
             
             // Call the underlying service directly to avoid async/await complications
-            let children = SharedDataManager.shared.getChildren(forParentEmail: userEmail)
+            let coreDataChildren = SharedDataManager.shared.getChildren(forParentEmail: userEmail)
+            
+            // Convert Core Data Users to Supabase Profiles for compatibility
+            let profileChildren = coreDataChildren.map { user in
+                Profile(
+                    id: UUID(), // Generate temp ID for Core Data users
+                    email: user.email ?? "",
+                    name: user.name,
+                    userType: user.isParent ? .parent : .child
+                )
+            }
             
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
-                self.state.linkedChildren = children
+                self.state.linkedChildren = profileChildren
                 self.state.isLoadingChildren = false
             }
         }
