@@ -4,29 +4,62 @@ import ManagedSettings
 
 struct ApprovedAppsView: View {
     // MARK: - Properties
-    @ObservedObject var child: Profile
+    let childProfile: Profile
+    @StateObject private var viewModel: ApprovedAppsViewModel
     
     // MARK: - Environment
     @Environment(\.dismiss) private var dismiss
     
-    // MARK: - State
-    @State private var isLoading = false
-    @State private var error: String?
-    @State private var selectedApps: Set<SupabaseApprovedApp> = []
-    @State private var availableApps: [SupabaseApprovedApp] = []
+    // MARK: - Initialization
+    init(child: Profile) {
+        self.childProfile = child
+        self._viewModel = StateObject(wrappedValue: ApprovedAppsViewModel(childProfile: child))
+    }
     
     // MARK: - Body
     var body: some View {
         NavigationView {
             VStack {
-                if isLoading {
+                if viewModel.isLoading {
                     ProgressView("Loading apps...")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    List {
-                        // TODO: Implement approved apps list with Supabase
-                        Text("Approved Apps functionality will be implemented with Supabase integration")
-                            .foregroundColor(.secondary)
+                    VStack {
+                        // Search bar
+                        SearchBar(text: $viewModel.searchText)
+                            .padding(.horizontal)
+                        
+                        // Apps list
+                        List {
+                            ForEach(Array(viewModel.appsByCategory.keys.sorted(by: { $0.displayName < $1.displayName })), id: \.self) { category in
+                                if let apps = viewModel.appsByCategory[category], !apps.isEmpty {
+                                    Section(header: Text(category.displayName)) {
+                                        ForEach(apps) { app in
+                                            ApprovedAppRow(
+                                                app: app,
+                                                isSelected: viewModel.selectedApps.contains(app),
+                                                onToggle: {
+                                                    viewModel.toggleAppSelection(app)
+                                                },
+                                                onRemove: {
+                                                    Task {
+                                                        await viewModel.removeApprovedApp(app)
+                                                    }
+                                                },
+                                                onUpdateLimit: { minutes in
+                                                    Task {
+                                                        await viewModel.updateDailyLimit(for: app, minutes: minutes)
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .refreshable {
+                            await viewModel.loadApprovedApps()
+                        }
                     }
                 }
             }
@@ -41,107 +74,189 @@ struct ApprovedAppsView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
-                        saveApprovedApps()
+                        Task {
+                            await viewModel.saveApprovedApps()
+                            if viewModel.errorMessage == nil {
+                                dismiss()
+                            }
+                        }
                     }
-                    .disabled(isLoading)
+                    .disabled(viewModel.isSaving || !viewModel.hasUnsavedChanges)
                 }
             }
         }
         .task {
-            await loadApprovedApps()
+            await viewModel.loadApprovedApps()
         }
-        .alert("Error", isPresented: .constant(error != nil)) {
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {
-                error = nil
+                viewModel.clearError()
             }
         } message: {
-            Text(error ?? "")
+            Text(viewModel.errorMessage ?? "")
         }
-    }
-    
-    // MARK: - Actions
-    private func loadApprovedApps() async {
-        isLoading = true
-        defer { isLoading = false }
-        
-        // TODO: Load approved apps from Supabase
-        // For now, just create some sample data
-        await MainActor.run {
-            availableApps = []
-            selectedApps = []
+        .alert("Success", isPresented: $viewModel.showSuccessMessage) {
+            Button("OK") {
+                viewModel.clearSuccessMessage()
+            }
+        } message: {
+            Text("Approved apps updated successfully")
         }
-    }
-    
-    private func saveApprovedApps() {
-        Task {
-            isLoading = true
-            defer { isLoading = false }
-            
-            do {
-                // TODO: Implement saving approved apps to Supabase
-                print("Saving approved apps for child: \(child.name)")
-                
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error.localizedDescription
-                }
+        .overlay {
+            if viewModel.isSaving {
+                ProgressView("Saving...")
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .foregroundColor(.white)
             }
         }
     }
+}
+
+// MARK: - Search Bar
+struct SearchBar: View {
+    @Binding var text: String
     
-    private func removeApprovedApp(_ app: SupabaseApprovedApp) {
-        Task {
-            isLoading = true
-            defer { isLoading = false }
+    var body: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
             
-            do {
-                // TODO: Implement removing approved app from Supabase
-                print("Removing approved app: \(app.name)")
-                
-                await MainActor.run {
-                    selectedApps.remove(app)
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = error.localizedDescription
-                }
-            }
+            TextField("Search apps...", text: $text)
+                .textFieldStyle(RoundedBorderTextFieldStyle())
         }
     }
 }
 
 // MARK: - Approved App Row
 struct ApprovedAppRow: View {
-    @ObservedObject var app: SupabaseApprovedApp
+    let app: SupabaseApprovedApp
     let isSelected: Bool
     let onToggle: () -> Void
+    let onRemove: () -> Void
+    let onUpdateLimit: (Int32) -> Void
+    
+    @State private var showingLimitEditor = false
+    @State private var limitMinutes: Int32
+    
+    init(app: SupabaseApprovedApp, isSelected: Bool, onToggle: @escaping () -> Void, onRemove: @escaping () -> Void, onUpdateLimit: @escaping (Int32) -> Void) {
+        self.app = app
+        self.isSelected = isSelected
+        self.onToggle = onToggle
+        self.onRemove = onRemove
+        self.onUpdateLimit = onUpdateLimit
+        self._limitMinutes = State(initialValue: app.dailyLimitMinutes)
+    }
     
     var body: some View {
         HStack {
-            Image(systemName: "app.fill")
+            // App icon placeholder
+            Image(systemName: app.category.systemImageName)
                 .foregroundColor(.blue)
                 .frame(width: 32, height: 32)
             
-            VStack(alignment: .leading) {
-                Text(app.name)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(app.displayName)
                     .font(.headline)
                 
-                Text(app.name)
+                Text(app.bundleIdentifier)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                
+                if app.dailyLimitSeconds > 0 {
+                    Text(app.formattedDailyLimit)
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
             }
             
             Spacer()
             
-            Button(action: onToggle) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .green : .gray)
+            VStack {
+                // Selection toggle
+                Button(action: onToggle) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(isSelected ? .green : .gray)
+                        .font(.title2)
+                }
+                
+                // Daily limit button
+                Button(action: { showingLimitEditor = true }) {
+                    Image(systemName: "clock")
+                        .foregroundColor(.blue)
+                        .font(.caption)
+                }
             }
         }
         .padding(.vertical, 4)
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                onRemove()
+            } label: {
+                Label("Remove", systemImage: "trash")
+            }
+        }
+        .sheet(isPresented: $showingLimitEditor) {
+            DailyLimitEditor(
+                appName: app.displayName,
+                currentMinutes: limitMinutes,
+                onSave: { minutes in
+                    limitMinutes = minutes
+                    onUpdateLimit(minutes)
+                }
+            )
+        }
+    }
+}
+
+// MARK: - Daily Limit Editor
+struct DailyLimitEditor: View {
+    let appName: String
+    @State var currentMinutes: Int32
+    let onSave: (Int32) -> Void
+    
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 20) {
+                Text("Daily Limit for \(appName)")
+                    .font(.headline)
+                    .padding()
+                
+                Stepper(value: $currentMinutes, in: 0...480, step: 15) {
+                    HStack {
+                        Text("Daily Limit:")
+                        Spacer()
+                        Text("\(currentMinutes) minutes")
+                            .foregroundColor(.blue)
+                    }
+                }
+                .padding(.horizontal)
+                
+                if currentMinutes == 0 {
+                    Text("No daily limit")
+                        .foregroundColor(.orange)
+                        .font(.caption)
+                }
+                
+                Spacer()
+            }
+            .navigationTitle("Set Limit")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        onSave(currentMinutes)
+                        dismiss()
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -173,6 +288,6 @@ struct AppPickerView: View {
 // MARK: - Preview
 struct ApprovedAppsView_Previews: PreviewProvider {
     static var previews: some View {
-        ApprovedAppsView(child: Profile())
+        ApprovedAppsView(child: Profile.mockChild)
     }
 } 

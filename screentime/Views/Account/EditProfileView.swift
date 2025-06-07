@@ -4,82 +4,102 @@ struct EditProfileView: View {
     @EnvironmentObject private var authService: SupabaseAuthService
     @Environment(\.dismiss) private var dismiss
     
-    @State private var name: String = ""
-    @State private var email: String = ""
-    @State private var isLoading = false
-    @State private var error: AuthError?
-    @State private var hasChanges = false
+    @StateObject private var viewModel: ProfileEditViewModel
+    
+    init() {
+        // We'll initialize the viewModel with a placeholder and update it in onAppear
+        self._viewModel = StateObject(wrappedValue: ProfileEditViewModel(profile: Profile()))
+    }
     
     var body: some View {
         Form {
             Section(header: Text("Personal Information")) {
-                TextField("Name", text: $name)
+                TextField("Name", text: $viewModel.name)
                     .textContentType(.name)
-                    .onChange(of: name) { _ in hasChanges = true }
                 
-                TextField("Email", text: $email)
+                TextField("Email", text: $viewModel.email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .autocapitalization(.none)
-                    .onChange(of: email) { _ in hasChanges = true }
+            }
+            
+            if viewModel.showSuccessMessage {
+                Section {
+                    HStack {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                        Text("Profile updated successfully")
+                            .foregroundColor(.green)
+                    }
+                }
             }
         }
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") { 
+                    viewModel.resetFields()
+                    dismiss() 
+                }
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { saveChanges() }
-                    .disabled(!hasChanges || isLoading)
+                Button("Save") { 
+                    Task {
+                        await saveChanges()
+                    }
+                }
+                .disabled(!viewModel.canSave || viewModel.isSaving)
             }
         }
-        .onAppear(perform: loadUserData)
-        .alert(isPresented: .constant(error != nil), error: error) { _ in
-            Button("OK") { error = nil }
-        } message: { error in
-            Text(error.recoverySuggestion ?? "Please try again.")
+        .onAppear {
+            loadUserData()
+        }
+        .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
+            Button("OK") { 
+                viewModel.clearError() 
+            }
+        } message: {
+            Text(viewModel.errorMessage ?? "Please try again.")
         }
         .overlay {
-            if isLoading {
-                ProgressView()
+            if viewModel.isSaving {
+                ProgressView("Saving...")
+                    .padding()
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(10)
+                    .foregroundColor(.white)
             }
         }
     }
     
     private func loadUserData() {
         guard let profile = authService.currentProfile else { return }
-        name = profile.name
-        email = profile.email
+        
+        // Create a new viewModel with the current profile
+        let newViewModel = ProfileEditViewModel(profile: profile)
+        
+        // We need to manually update the properties since we can't reassign @StateObject
+        viewModel.name = profile.name
+        viewModel.email = profile.email
     }
     
-    private func saveChanges() {
-        guard var profile = authService.currentProfile else { return }
-        
-        isLoading = true
-        
-        Task {
-            profile.name = name
-            profile.email = email
+    private func saveChanges() async {
+        do {
+            try await viewModel.saveChanges()
             
-            do {
-                try await authService.updateProfile(profile)
-                await MainActor.run {
-                    isLoading = false
-                    dismiss()
-                }
-            } catch let authError as AuthError {
-                await MainActor.run {
-                    self.error = authError
-                    isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.error = .unknownError
-                    isLoading = false
-                }
+            // Update the auth service with the new profile
+            let updatedProfile = viewModel.updatedProfile
+            try await authService.updateProfile(updatedProfile)
+            
+            // Automatically dismiss after successful save
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                dismiss()
             }
+            
+        } catch {
+            // Error is already handled by the viewModel
+            print("Failed to save profile: \(error)")
         }
     }
 }

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChildDetailView: View {
-    @ObservedObject var child: Profile
+    let child: Profile
     @StateObject private var viewModel = ChildDetailViewModel()
     @State private var dailyLimit: Int = 120 // Default 2 hours
     @State private var weeklyLimit: Int = 840 // Default 14 hours
