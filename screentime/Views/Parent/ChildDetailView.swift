@@ -1,255 +1,234 @@
 import SwiftUI
 
 struct ChildDetailView: View {
-    // MARK: - Properties
-    @ObservedObject var child: User
+    @ObservedObject var child: Profile
+    @StateObject private var viewModel = ChildDetailViewModel()
+    @State private var dailyLimit: Int = 120 // Default 2 hours
+    @State private var weeklyLimit: Int = 840 // Default 14 hours
+    @State private var showingEditLimits = false
+    @State private var showingAlert = false
+    @State private var alertMessage = ""
     
-    // MARK: - State
-    @State private var showEditLimits = false
-    @State private var showApprovedApps = false
-    @State private var showAddTime = false
-    @State private var additionalMinutes: Int32 = 30
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    // MARK: - Body
     var body: some View {
-        List {
-            // Screen Time Section
-            Section(header: Text("Screen Time")) {
-                if let balance = child.screenTimeBalance {
-                    HStack {
-                        Text("Time Remaining")
-                        Spacer()
-                        Text(balance.formattedTimeRemaining)
-                            .foregroundColor(.secondary)
-                    }
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // Child profile header
+                    childProfileHeader
                     
-                    HStack {
-                        Text("Daily Limit")
-                        Spacer()
-                        Text("\(balance.dailyLimit) minutes")
-                            .foregroundColor(.secondary)
-                    }
+                    // Screen time overview
+                    screenTimeOverview
                     
-                    HStack {
-                        Text("Weekly Limit")
-                        Spacer()
-                        Text("\(balance.weeklyLimit) minutes")
-                            .foregroundColor(.secondary)
-                    }
+                    // Tasks section
+                    tasksSection
                     
-                    if balance.isTimerActive {
-                        HStack {
-                            Text("Timer Active")
-                            Spacer()
-                            Image(systemName: "hourglass")
-                                .foregroundColor(.accentColor)
-                        }
-                    }
+                    // Quick actions
+                    quickActionsSection
                 }
+                .padding()
             }
-            
-            // Tasks Section
-            Section(header: Text("Tasks")) {
-                NavigationLink(destination: TaskListView()) {
-                    HStack {
-                        Text("View Tasks")
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            
-            // Actions Section
-            Section(header: Text("Actions")) {
-                Button(action: { showAddTime = true }) {
-                    Label("Add Time", systemImage: "plus.circle")
-                }
-                
-                Button(action: { showEditLimits = true }) {
-                    Label("Edit Limits", systemImage: "clock")
-                }
-                
-                Button(action: { showApprovedApps = true }) {
-                    Label("Approved Apps", systemImage: "app.badge.checkmark")
-                }
+            .navigationTitle(child.name)
+            .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                viewModel.loadChild(child)
             }
         }
-        .navigationTitle(child.name)
-        .sheet(isPresented: $showEditLimits) {
-            EditLimitsView(child: child)
+        .sheet(isPresented: $showingEditLimits) {
+            EditLimitsView(dailyLimit: $dailyLimit, weeklyLimit: $weeklyLimit)
         }
-        .sheet(isPresented: $showApprovedApps) {
-            ApprovedAppsView(child: child)
-        }
-        .sheet(isPresented: $showAddTime) {
-            AddTimeView(minutes: $additionalMinutes) {
-                addTime()
-            }
-        }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+        .alert("Action Complete", isPresented: $showingAlert) {
+            Button("OK") { }
         } message: {
-            Text(errorMessage)
+            Text(alertMessage)
         }
     }
     
-    // MARK: - Actions
-    private func addTime() {
-        guard let balance = child.screenTimeBalance,
-              let childEmail = child.email else { return }
-        
-        _Concurrency.Task {
-            do {
-                // Verify parent authorization
-                guard try await AuthenticationService.shared.authorizeParentAction() else {
-                    throw AuthenticationService.AuthError.unauthorized
+    // MARK: - Child Profile Header
+    private var childProfileHeader: some View {
+        VStack(spacing: 16) {
+            // Avatar
+            Circle()
+                .fill(LinearGradient.childGradient)
+                .frame(width: 80, height: 80)
+                .overlay(
+                    Text(String(child.name.prefix(1)).uppercased())
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                )
+            
+            VStack(spacing: 4) {
+                Text(child.name)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                
+                Text(child.userType == .child ? "Child Account" : "Parent Account")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .cardStyle()
+    }
+    
+    // MARK: - Screen Time Overview
+    private var screenTimeOverview: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Screen Time Today")
+                .font(.headline)
+            
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Daily Limit")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("\(dailyLimit) min")
+                        .font(.title3)
+                        .fontWeight(.semibold)
                 }
                 
-                // Add time
-                balance.addTime(additionalMinutes)
-                try CoreDataManager.shared.save()
+                Spacer()
                 
-                // Notify SharedDataManager
-                SharedDataManager.shared.updateScreenTime(forChildEmail: childEmail, minutes: balance.availableMinutes)
-                
-                await MainActor.run {
-                    showAddTime = false
+                Button("Edit Limits") {
+                    showingEditLimits = true
                 }
-            } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
+                .buttonStyle(.bordered)
+            }
+        }
+        .cardStyle()
+    }
+    
+    // MARK: - Tasks Section
+    private var tasksSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Assigned Tasks")
+                .font(.headline)
+            
+            if viewModel.tasks.isEmpty {
+                Text("No tasks assigned")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(viewModel.tasks, id: \.id) { task in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(task.title)
+                                .font(.body)
+                                .fontWeight(.medium)
+                            
+                            if let description = task.taskDescription {
+                                Text(description)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        Text("\(task.rewardMinutes) min")
+                            .font(.caption)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.green.opacity(0.2))
+                            .cornerRadius(8)
+                    }
+                    .padding(.vertical, 8)
                 }
             }
         }
+        .cardStyle()
+    }
+    
+    // MARK: - Quick Actions
+    private var quickActionsSection: some View {
+        VStack(spacing: 12) {
+            Text("Quick Actions")
+                .font(.headline)
+            
+            Button("Grant 30 Minutes") {
+                grantAdditionalTime(30)
+            }
+            .primaryButtonStyle()
+            
+            Button("Remove 15 Minutes") {
+                removeTime(15)
+            }
+            .secondaryButtonStyle()
+        }
+        .cardStyle()
+    }
+    
+    // MARK: - Actions
+    private func grantAdditionalTime(_ minutes: Int) {
+        // TODO: Implement with Supabase services
+        alertMessage = "Granted \(minutes) minutes of additional screen time"
+        showingAlert = true
+    }
+    
+    private func removeTime(_ minutes: Int) {
+        // TODO: Implement with Supabase services
+        alertMessage = "Removed \(minutes) minutes of screen time"
+        showingAlert = true
+    }
+}
+
+// MARK: - Child Detail View Model
+@MainActor
+final class ChildDetailViewModel: ObservableObject {
+    @Published var tasks: [SupabaseTask] = []
+    @Published var screenTimeBalance: SupabaseScreenTimeBalance?
+    @Published var isLoading = false
+    
+    func loadChild(_ child: Profile) {
+        // TODO: Load child data from Supabase
+        isLoading = true
+        
+        // Mock data for now
+        tasks = []
+        
+        isLoading = false
     }
 }
 
 // MARK: - Edit Limits View
 struct EditLimitsView: View {
-    // MARK: - Properties
-    @ObservedObject var child: User
-    
-    // MARK: - Environment
+    @Binding var dailyLimit: Int
+    @Binding var weeklyLimit: Int
     @Environment(\.dismiss) private var dismiss
     
-    // MARK: - State
-    @State private var dailyLimit: Int32
-    @State private var weeklyLimit: Int32
-    @State private var showError = false
-    @State private var errorMessage = ""
-    
-    init(child: User) {
-        self.child = child
-        _dailyLimit = State(initialValue: child.screenTimeBalance?.dailyLimit ?? 120)
-        _weeklyLimit = State(initialValue: child.screenTimeBalance?.weeklyLimit ?? 840)
-    }
-    
-    // MARK: - Body
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Time Limits")) {
-                    Stepper(
-                        "Daily Limit: \(dailyLimit) minutes",
-                        value: $dailyLimit,
-                        in: 0...1440,
-                        step: 30
-                    )
-                    
-                    Stepper(
-                        "Weekly Limit: \(weeklyLimit) minutes",
-                        value: $weeklyLimit,
-                        in: 0...10080,
-                        step: 60
-                    )
+                Section("Daily Limit") {
+                    Stepper("\(dailyLimit) minutes", value: $dailyLimit, in: 30...480, step: 15)
+                }
+                
+                Section("Weekly Limit") {
+                    Stepper("\(weeklyLimit) minutes", value: $weeklyLimit, in: 210...3360, step: 30)
                 }
             }
             .navigationTitle("Edit Limits")
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() },
-                trailing: Button("Save") { saveLimits() }
-            )
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
-            }
-        }
-    }
-    
-    // MARK: - Actions
-    private func saveLimits() {
-        guard let balance = child.screenTimeBalance else { return }
-        
-        _Concurrency.Task {
-            do {
-                // Verify parent authorization
-                guard try await AuthenticationService.shared.authorizeParentAction() else {
-                    throw AuthenticationService.AuthError.unauthorized
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
                 }
                 
-                // Update limits
-                balance.dailyLimit = dailyLimit
-                balance.weeklyLimit = weeklyLimit
-                try CoreDataManager.shared.save()
-                
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        // TODO: Save limits with Supabase
+                        dismiss()
+                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Add Time View
-struct AddTimeView: View {
-    // MARK: - Properties
-    @Environment(\.dismiss) private var dismiss
-    @Binding var minutes: Int32
-    let onAdd: () -> Void
-    
-    // MARK: - Body
-    var body: some View {
-        NavigationView {
-            Form {
-                Section(header: Text("Add Time")) {
-                    Stepper(
-                        "Add \(minutes) minutes",
-                        value: .init(
-                            get: { Int(minutes) },
-                            set: { minutes = Int32($0) }
-                        ),
-                        in: 15...120,
-                        step: 15
-                    )
-                }
-            }
-            .navigationTitle("Add Screen Time")
-            .navigationBarItems(
-                leading: Button("Cancel") { dismiss() },
-                trailing: Button("Add") {
-                    onAdd()
-                    dismiss()
-                }
-            )
-        }
-    }
-}
-
-// MARK: - Preview
+// MARK: - Previews
 struct ChildDetailView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
-            ChildDetailView(child: User())
-        }
+        ChildDetailView(child: Profile.mockChild)
     }
 } 
