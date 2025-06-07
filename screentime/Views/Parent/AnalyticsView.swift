@@ -7,9 +7,10 @@ struct AnalyticsView: View {
     
     // MARK: - State
     @FetchRequest(
+        entity: User.entity(),
         sortDescriptors: [NSSortDescriptor(keyPath: \User.name, ascending: true)],
-        predicate: NSPredicate(format: "userType == %@", User.UserType.child.rawValue)
-    ) private var children: FetchedResults<User>
+        predicate: NSPredicate(format: "userType == %@", Profile.UserType.child.rawValue)
+    ) var children: FetchedResults<User>
     
     @State private var selectedChild: User?
     @State private var selectedTimeframe: Timeframe = .week
@@ -23,7 +24,7 @@ struct AnalyticsView: View {
             if !children.isEmpty {
                 Picker("Select Child", selection: $selectedChild) {
                     Text("All Children").tag(nil as User?)
-                    ForEach(children) { child in
+                    ForEach(children, id: \.objectID) { child in
                         Text(child.name).tag(child as User?)
                     }
                 }
@@ -61,8 +62,8 @@ struct AnalyticsView: View {
                     // App Usage Chart
                     if let child = selectedChild {
                         ChartCard(title: "App Usage") {
-                            AppUsageChart(
-                                apps: Array(child.screenTimeBalance?.approvedApps ?? [])
+                            ApprovedAppsChart(
+                                apps: [] // TODO: Implement approved apps fetching from Supabase
                             )
                         }
                     }
@@ -173,8 +174,8 @@ struct TaskCompletionChart: View {
 }
 
 // MARK: - App Usage Chart
-struct AppUsageChart: View {
-    let apps: [ApprovedApp]
+struct ApprovedAppsChart: View {
+    let apps: [SupabaseApprovedApp]
     
     var body: some View {
         Chart {
@@ -184,7 +185,7 @@ struct AppUsageChart: View {
                     innerRadius: .ratio(0.6),
                     angularInset: 1
                 )
-                .foregroundStyle(by: .value("App", app.appName))
+                .foregroundStyle(by: .value("App", app.name))
             }
         }
     }

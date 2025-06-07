@@ -4,100 +4,109 @@ import ManagedSettings
 
 struct ApprovedAppsView: View {
     // MARK: - Properties
-    @ObservedObject var child: User
+    @ObservedObject var child: Profile
     
     // MARK: - Environment
     @Environment(\.dismiss) private var dismiss
     
     // MARK: - State
-    @State private var showAppPicker = false
-    @State private var selectedApps: Set<ApprovedApp> = []
-    @State private var showError = false
-    @State private var errorMessage = ""
+    @State private var isLoading = false
+    @State private var error: String?
+    @State private var selectedApps: Set<SupabaseApprovedApp> = []
+    @State private var availableApps: [SupabaseApprovedApp] = []
     
     // MARK: - Body
     var body: some View {
         NavigationView {
-            List {
-                if let apps = child.screenTimeBalance?.approvedApps {
-                    ForEach(Array(apps)) { app in
-                        ApprovedAppRow(app: app)
+            VStack {
+                if isLoading {
+                    ProgressView("Loading apps...")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List {
+                        // TODO: Implement approved apps list with Supabase
+                        Text("Approved Apps functionality will be implemented with Supabase integration")
+                            .foregroundColor(.secondary)
                     }
-                    .onDelete(perform: deleteApps)
                 }
             }
             .navigationTitle("Approved Apps")
-            .navigationBarItems(
-                leading: Button("Done") { dismiss() },
-                trailing: Button(action: { showAppPicker = true }) {
-                    Image(systemName: "plus")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
                 }
-            )
-            .sheet(isPresented: $showAppPicker) {
-                AppPickerView { selections in
-                    addApps(selections)
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Save") {
+                        saveApprovedApps()
+                    }
+                    .disabled(isLoading)
                 }
             }
-            .alert("Error", isPresented: $showError) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(errorMessage)
+        }
+        .task {
+            await loadApprovedApps()
+        }
+        .alert("Error", isPresented: .constant(error != nil)) {
+            Button("OK") {
+                error = nil
             }
+        } message: {
+            Text(error ?? "")
         }
     }
     
     // MARK: - Actions
-    private func addApps(_ selections: FamilyActivitySelection) {
-        guard let balance = child.screenTimeBalance else { return }
+    private func loadApprovedApps() async {
+        isLoading = true
+        defer { isLoading = false }
         
-        _Concurrency.Task {
+        // TODO: Load approved apps from Supabase
+        // For now, just create some sample data
+        await MainActor.run {
+            availableApps = []
+            selectedApps = []
+        }
+    }
+    
+    private func saveApprovedApps() {
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            
             do {
-                // Verify parent authorization
-                guard try await AuthenticationService.shared.authorizeParentAction() else {
-                    throw AuthenticationService.AuthError.unauthorized
-                }
+                // TODO: Implement saving approved apps to Supabase
+                print("Saving approved apps for child: \(child.name)")
                 
-                // Add selected apps
-                for token in selections.applicationTokens {
-                    // In a real implementation, you would get the bundle ID from the token
-                    // For now, we'll use a placeholder
-                    let bundleId = "app.bundle.id"
-                    let appName = "App Name"
-                    
-                    try CoreDataManager.shared.createApprovedApp(
-                        bundleIdentifier: bundleId,
-                        appName: appName,
-                        for: balance
-                    )
+                await MainActor.run {
+                    dismiss()
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
+                    self.error = error.localizedDescription
                 }
             }
         }
     }
     
-    private func deleteApps(at offsets: IndexSet) {
-        guard let apps = child.screenTimeBalance?.approvedApps else { return }
-        
-        _Concurrency.Task {
+    private func removeApprovedApp(_ app: SupabaseApprovedApp) {
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            
             do {
-                // Verify parent authorization
-                guard try await AuthenticationService.shared.authorizeParentAction() else {
-                    throw AuthenticationService.AuthError.unauthorized
-                }
+                // TODO: Implement removing approved app from Supabase
+                print("Removing approved app: \(app.name)")
                 
-                // Delete selected apps
-                for index in offsets {
-                    let app = Array(apps)[index]
-                    try CoreDataManager.shared.delete(app)
+                await MainActor.run {
+                    selectedApps.remove(app)
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
+                    self.error = error.localizedDescription
                 }
             }
         }
@@ -106,28 +115,31 @@ struct ApprovedAppsView: View {
 
 // MARK: - Approved App Row
 struct ApprovedAppRow: View {
-    @ObservedObject var app: ApprovedApp
+    @ObservedObject var app: SupabaseApprovedApp
+    let isSelected: Bool
+    let onToggle: () -> Void
     
     var body: some View {
         HStack {
+            Image(systemName: "app.fill")
+                .foregroundColor(.blue)
+                .frame(width: 32, height: 32)
+            
             VStack(alignment: .leading) {
-                Text(app.appName)
+                Text(app.name)
                     .font(.headline)
                 
-                Text(app.bundleIdentifier)
+                Text(app.name)
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            Toggle("", isOn: Binding(
-                get: { app.isEnabled },
-                set: { newValue in
-                    app.isEnabled = newValue
-                    try? CoreDataManager.shared.save()
-                }
-            ))
+            Button(action: onToggle) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundColor(isSelected ? .green : .gray)
+            }
         }
         .padding(.vertical, 4)
     }
@@ -161,6 +173,6 @@ struct AppPickerView: View {
 // MARK: - Preview
 struct ApprovedAppsView_Previews: PreviewProvider {
     static var previews: some View {
-        ApprovedAppsView(child: User())
+        ApprovedAppsView(child: Profile())
     }
 } 
