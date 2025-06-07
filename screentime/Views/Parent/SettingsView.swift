@@ -1,167 +1,95 @@
 import SwiftUI
 
 struct SettingsView: View {
-    // MARK: - Environment
+    @EnvironmentObject private var authService: SupabaseAuthService
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var authService: AuthenticationService
     
-    // MARK: - State
-    @State private var showSignOutAlert = false
-    @State private var enableNotifications = true
-    @State private var enableBiometrics = true
-    @State private var showAbout = false
-    
-    // MARK: - Body
     var body: some View {
         NavigationView {
-            Form {
-                // User Section
-                Section(header: Text("Account")) {
-                    if let user = authService.currentUser {
+            List {
+                Section {
+                    if let profile = authService.currentProfile {
                         HStack {
+                            Circle()
+                                .fill(LinearGradient.parentGradient)
+                                .frame(width: 50, height: 50)
+                                .overlay(
+                                    Text(String(profile.name.prefix(1)).uppercased())
+                                        .font(.title2)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.white)
+                                )
+                            
                             VStack(alignment: .leading) {
-                                Text(user.name)
+                                Text(profile.name)
                                     .font(.headline)
-                                if let email = user.email {
-                                    Text(email)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
+                                Text(profile.email)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
                             }
+                            
                             Spacer()
-                            Text(user.isParent ? "Parent" : "Child")
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.accentColor.opacity(0.2))
-                                .cornerRadius(4)
                         }
+                        .padding(.vertical, 8)
                     }
-                    
-                    Button(action: { showSignOutAlert = true }) {
-                        Text("Sign Out")
-                            .foregroundColor(.red)
-                    }
+                } header: {
+                    Text("Account")
                 }
                 
-                // Preferences Section
-                Section(header: Text("Preferences")) {
-                    Toggle("Push Notifications", isOn: $enableNotifications)
-                        .onChange(of: enableNotifications) { newValue in
-                            updateNotificationSettings(enabled: newValue)
-                        }
-                    
-                    Toggle("Biometric Authentication", isOn: $enableBiometrics)
-                        .onChange(of: enableBiometrics) { newValue in
-                            updateBiometricSettings(enabled: newValue)
-                        }
-                }
-                
-                // About Section
-                Section(header: Text("About")) {
-                    HStack {
-                        Text("Version")
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
+                Section {
+                    NavigationLink("Edit Profile") {
+                        EditProfileView()
                     }
                     
-                    Button(action: { showAbout = true }) {
-                        Text("About Screen Time Manager")
+                    NavigationLink("Privacy Settings") {
+                        PrivacySettingsView()
                     }
                     
-                    Link("Privacy Policy", destination: URL(string: "https://example.com/privacy") ?? URL(string: "https://apple.com")!)
-                    
-                    Link("Terms of Service", destination: URL(string: "https://example.com/terms") ?? URL(string: "https://apple.com")!)
+                    NavigationLink("Notification Preferences") {
+                        NotificationPreferencesView()
+                    }
+                } header: {
+                    Text("Preferences")
                 }
                 
-                // Support Section
-                Section(header: Text("Support")) {
-                    Link("Contact Support", destination: URL(string: "mailto:support@example.com") ?? URL(string: "https://apple.com")!)
+                Section {
+                    NavigationLink("Help & Support") {
+                        Text("Help & Support - Coming Soon")
+                    }
                     
-                    Link("FAQ", destination: URL(string: "https://example.com/faq") ?? URL(string: "https://apple.com")!)
+                    NavigationLink("About") {
+                        Text("About - Coming Soon")
+                    }
+                } header: {
+                    Text("Support")
+                }
+                
+                Section {
+                    Button("Sign Out", role: .destructive) {
+                        signOut()
+                    }
                 }
             }
             .navigationTitle("Settings")
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
-            .alert("Sign Out", isPresented: $showSignOutAlert) {
-                Button("Cancel", role: .cancel) {}
-                Button("Sign Out", role: .destructive) {
-                    signOut()
-                }
-            } message: {
-                Text("Are you sure you want to sign out?")
-            }
-            .sheet(isPresented: $showAbout) {
-                AboutView()
-            }
+            .navigationBarTitleDisplayMode(.large)
         }
     }
     
-    // MARK: - Actions
     private func signOut() {
-        authService.signOut()
-        dismiss()
-    }
-    
-    private func updateNotificationSettings(enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "notificationsEnabled")
-        
-        if enabled {
-            _Concurrency.Task {
-                do {
-                    _ = try await NotificationService.shared.requestAuthorization()
-                } catch {
-                    print("Failed to enable notifications: \(error)")
-                }
+        Task {
+            do {
+                try await authService.signOut()
+            } catch {
+                print("Failed to sign out: \(error)")
             }
-        }
-    }
-    
-    private func updateBiometricSettings(enabled: Bool) {
-        UserDefaults.standard.set(enabled, forKey: "biometricsEnabled")
-    }
-}
-
-// MARK: - About View
-struct AboutView: View {
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
-                Image(systemName: "hourglass")
-                    .font(.system(size: 80))
-                    .foregroundColor(.accentColor)
-                
-                Text("Screen Time Manager")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("Version 1.0.0")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                
-                Text("A smart way to manage screen time for families")
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                Spacer()
-                
-                Text("© 2024 Screen Time World")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding()
-            .navigationBarItems(trailing: Button("Done") { dismiss() })
         }
     }
 }
 
-// MARK: - Preview
+// MARK: - Previews
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView()
-            .environmentObject(AuthenticationService.shared)
+            .environmentObject(SupabaseAuthService())
     }
 } 
