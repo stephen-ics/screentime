@@ -9,12 +9,14 @@ struct AuthenticationView: View {
     @State private var isParent = true
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var errorRecovery = ""
     @State private var isLoading = false
     @State private var showPassword = false
     @State private var animateGradient = false
+    @State private var showDemoMode = false
     
     // MARK: - Environment
-    @EnvironmentObject private var authService: AuthenticationService
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
     @Environment(\.colorScheme) private var colorScheme
     
     // MARK: - Body
@@ -23,48 +25,71 @@ struct AuthenticationView: View {
             // Animated Background
             backgroundGradient
             
-            ScrollView {
-                VStack(spacing: DesignSystem.Spacing.xxLarge) {
-                    // Logo and Welcome
-                    headerSection
-                        .padding(.top, DesignSystem.Spacing.xxxLarge)
-                    
-                    // Form Card
-                    GlassCard {
-                        VStack(spacing: DesignSystem.Spacing.large) {
-                            // Account Type Selector (Sign Up only)
-                            if isSignUp {
-                                accountTypeSelector
-                                    .transition(.asymmetric(
-                                        insertion: .scale.combined(with: .opacity),
-                                        removal: .scale.combined(with: .opacity)
-                                    ))
+            VStack(spacing: 0) {
+                // Demo Mode Banner
+                demoBanner
+                
+                ScrollView {
+                    VStack(spacing: DesignSystem.Spacing.xxLarge) {
+                        // Logo and Welcome
+                        headerSection
+                            .padding(.top, showDemoMode ? DesignSystem.Spacing.medium : DesignSystem.Spacing.xxxLarge)
+                        
+                        // Form Card
+                        GlassCard {
+                            VStack(spacing: DesignSystem.Spacing.large) {
+                                // Account Type Selector (Sign Up only)
+                                if isSignUp {
+                                    accountTypeSelector
+                                        .transition(.asymmetric(
+                                            insertion: .scale.combined(with: .opacity),
+                                            removal: .scale.combined(with: .opacity)
+                                        ))
+                                }
+                                
+                                // Form Fields
+                                formFields
+                                
+                                // Action Buttons
+                                actionButtons
                             }
-                            
-                            // Form Fields
-                            formFields
-                            
-                            // Action Buttons
-                            actionButtons
                         }
+                        .padding(.horizontal, DesignSystem.Spacing.large)
+                        
+                        // Toggle Sign In/Up
+                        toggleAuthMode
+                            .padding(.bottom, DesignSystem.Spacing.xxxLarge)
                     }
-                    .padding(.horizontal, DesignSystem.Spacing.large)
-                    
-                    // Toggle Sign In/Up
-                    toggleAuthMode
-                        .padding(.bottom, DesignSystem.Spacing.xxxLarge)
+                }
+                .scrollDismissesKeyboard(.interactively)
+            }
+        }
+        .alert("Authentication Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+            if !errorRecovery.isEmpty {
+                Button("Learn More") {
+                    // Could open a help view or settings
                 }
             }
-            .scrollDismissesKeyboard(.interactively)
-        }
-        .alert("Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
         } message: {
-            Text(errorMessage)
+            VStack(alignment: .leading, spacing: 8) {
+                Text(errorMessage)
+                if !errorRecovery.isEmpty {
+                    Text(errorRecovery)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
         }
         .onAppear {
             withAnimation(.linear(duration: 3).repeatForever(autoreverses: true)) {
                 animateGradient.toggle()
+            }
+            
+            // Check if we're in demo mode
+            let isSupabaseConfigured = SupabaseManager.shared.client != nil
+            withAnimation(.easeInOut(duration: 0.5)) {
+                showDemoMode = !isSupabaseConfigured
             }
         }
     }
@@ -303,30 +328,161 @@ struct AuthenticationView: View {
         .buttonStyle(TextButtonStyle(color: .white))
     }
     
+    // MARK: - Demo Mode Banner
+    @ViewBuilder
+    private var demoBanner: some View {
+        if showDemoMode {
+            VStack(spacing: DesignSystem.Spacing.small) {
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    Image(systemName: "info.circle.fill")
+                        .foregroundColor(.orange)
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Demo Mode")
+                            .font(DesignSystem.Typography.calloutBold)
+                            .foregroundColor(.primary)
+                        
+                        Text("Supabase not configured. Using local demo authentication.")
+                            .font(DesignSystem.Typography.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Setup") {
+                        // Could navigate to setup instructions
+                    }
+                    .font(DesignSystem.Typography.caption1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(8)
+                }
+                
+                #if DEBUG
+                // Add test buttons in debug mode
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    Button("Test Supabase") {
+                        testSupabaseConnection()
+                    }
+                    .font(DesignSystem.Typography.caption1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.2))
+                    .cornerRadius(8)
+                    
+                    Button("Test Sign Up") {
+                        testSupabaseSignUp()
+                    }
+                    .font(DesignSystem.Typography.caption1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(8)
+                }
+                #endif
+            }
+            .padding(DesignSystem.Spacing.medium)
+            .background(.ultraThinMaterial)
+            .overlay(
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(DesignSystem.Colors.separator),
+                alignment: .bottom
+            )
+        }
+    }
+    
+    // MARK: - Test Functions
+    #if DEBUG
+    private func testSupabaseConnection() {
+        Task {
+            await SupabaseManager.shared.testSupabaseConnection()
+        }
+    }
+    
+    private func testSupabaseSignUp() {
+        Task {
+            do {
+                try await SupabaseManager.shared.testSignUp(
+                    email: "test@example.com",
+                    password: "testpassword123",
+                    name: "Test User",
+                    isParent: true
+                )
+                print("✅ Test sign up completed!")
+            } catch {
+                print("❌ Test sign up failed: \(error)")
+            }
+        }
+    }
+    #endif
+    
     // MARK: - Actions
     private func handleAuthentication() {
+        // Validate input
+        guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showErrorMessage("Please enter your email", recovery: "A valid email address is required to create or access your account")
+            return
+        }
+        
+        guard !password.isEmpty else {
+            showErrorMessage("Please enter your password", recovery: "Password is required for authentication")
+            return
+        }
+        
+        if isSignUp && name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            showErrorMessage("Please enter your name", recovery: "Your name will be displayed in the app and helps personalize your experience")
+            return
+        }
+        
         isLoading = true
         
         _Concurrency.Task {
             do {
                 if isSignUp {
                     try await authService.signUp(
-                        email: email,
+                        email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                         password: password,
-                        name: name,
+                        name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                         isParent: isParent
                     )
                 } else {
-                    try await authService.signIn(email: email, password: password)
+                    try await authService.signIn(
+                        email: email.trimmingCharacters(in: .whitespacesAndNewlines), 
+                        password: password
+                    )
+                }
+                
+                await MainActor.run {
+                    isLoading = false
+                    // Success - the RootView will handle navigation
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
                     isLoading = false
+                    
+                    // Handle specific error types with helpful messages
+                    if let authError = error as? AuthError {
+                        showErrorMessage(
+                            authError.localizedDescription,
+                            recovery: authError.recoverySuggestion ?? ""
+                        )
+                    } else {
+                        showErrorMessage(
+                            "Authentication failed",
+                            recovery: "Please check your internet connection and try again"
+                        )
+                    }
                 }
             }
         }
+    }
+    
+    private func showErrorMessage(_ message: String, recovery: String = "") {
+        errorMessage = message
+        errorRecovery = recovery
+        showError = true
     }
 }
 
@@ -437,14 +593,7 @@ struct SocialSignInButton: View {
 // MARK: - Preview
 struct AuthenticationView_Previews: PreviewProvider {
     static var previews: some View {
-        Group {
-            AuthenticationView()
-                .environmentObject(AuthenticationService.shared)
-                .preferredColorScheme(.light)
-            
-            AuthenticationView()
-                .environmentObject(AuthenticationService.shared)
-                .preferredColorScheme(.dark)
-        }
+        AuthenticationView()
+            .environmentObject(SafeSupabaseAuthService.shared)
     }
 } 
