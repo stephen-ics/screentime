@@ -1,31 +1,34 @@
-# ScreenTime App
+<p align="center">
+  <img width="800" height="400" object-fit="cover" src="https://wallpaperaccess.com/full/8094957.gif" alt="👋 Hey, I'm Stephen" title="👋 Hey, I'm Stephen"/>
+</p>
 
-A modern SwiftUI application for managing family screen time with comprehensive parental controls.
+## 😊 About Me! 
+Hey, I'm Stephen 👋, I'm an incoming Systems Design Engineering student at the University of Waterloo and an aspiring full-stack developer. I enjoy binging hackathons and connecting with likeminded individuals who are passionate about programming!
 
-## Features
-- Parent dashboard with child management
-- Task creation and tracking
-- Screen time monitoring
-- Real-time activity feeds
+## 🌱 I'm currently working on
+I'm currently obsessed with back-end architecture, specifically how to design scalable, data-heavy systems by annotating the book Designing Data Intensive Applications. I am also a serial hackathoner, check out my [Devpost!](https://devpost.com/StephenNi). Additionally, I'm also organizing hackathons such as [TurtleHacks!](https://turtlehacks.devpost.com/)!
 
-## Architecture
-- MVVM design pattern
-- Protocol-based dependency injection
-- Modular component architecture
-- Centralized navigation routing
-
-## Requirements
-- iOS 18.5+
-- Xcode 16+
-- SwiftUI
-
-## Installation
-1. Clone the repository
-2. Open `screentime.xcodeproj` in Xcode
-3. Build and run on iOS Simulator or device
-
-## Usage
-1. Create a parent account
-2. Link child accounts
-3. Set up tasks and screen time limits
-4. Monitor activity through the dashboard
+## Tech Stack
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/python/python-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/javascript/javascript-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/typescript/typescript-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/elixir/elixir-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/haskell/haskell-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/neo4j/neo4j-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/postgresql/postgresql-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/go/go-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/cplusplus/cplusplus-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/c/c-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/spring/spring-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/swift/swift-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/firebase/firebase-plain.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/redis/redis-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/elasticsearch/elasticsearch-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/amazonwebservices/amazonwebservices-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/kubernetes/kubernetes-plain.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/docker/docker-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/terraform/terraform-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/jenkins/jenkins-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/apachekafka/apachekafka-original.svg" /> &nbsp;
+<img height=40 src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/mongodb/mongodb-original.svg" />
