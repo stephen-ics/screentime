@@ -38,9 +38,22 @@
 		BC2812552DE6188F00F2FFF6 /* screentimeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = screentimeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BC9AEA452DF65992000FF9A0 /* Exceptions for "screentime" folder in "screentime" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BC28123D2DE6188E00F2FFF6 /* screentime */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BC2812402DE6188E00F2FFF6 /* screentime */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BC9AEA452DF65992000FF9A0 /* Exceptions for "screentime" folder in "screentime" target */,
+			);
 			path = screentime;
 			sourceTree = "<group>";
 		};
@@ -424,6 +437,7 @@
 				DEVELOPMENT_TEAM = R97XW27QCV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = screentime/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -452,6 +466,7 @@
 				DEVELOPMENT_TEAM = R97XW27QCV;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = screentime/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
