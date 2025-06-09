@@ -50,7 +50,9 @@ struct QuickActionsSection: View {
                     action: action,
                     count: action == .timeRequests ? pendingRequestsCount : nil
                 ) {
+                    print("🔘 SECTION DEBUG: QuickActionsSection callback called for: \(action.rawValue)")
                     onActionTapped(action)
+                    print("🔘 SECTION DEBUG: onActionTapped() completed for: \(action.rawValue)")
                 }
             }
         }
@@ -70,7 +72,11 @@ struct QuickActionCard: View {
     // MARK: - Body
     
     var body: some View {
-        BaseCard(action: onTap) {
+        BaseCard(action: {
+            print("🔘 BUTTON DEBUG: QuickActionCard tapped for action: \(action.rawValue)")
+            onTap()
+            print("🔘 BUTTON DEBUG: onTap() called for action: \(action.rawValue)")
+        }) {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                 cardHeader
                 actionTitle
