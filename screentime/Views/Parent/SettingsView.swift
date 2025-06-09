@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var authService: SupabaseAuthService
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -90,6 +90,6 @@ struct SettingsView: View {
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView()
-            .environmentObject(SupabaseAuthService())
+            .environmentObject(SafeSupabaseAuthService.shared)
     }
 } 
