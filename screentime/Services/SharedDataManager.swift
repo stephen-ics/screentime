@@ -29,12 +29,20 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     private init() {
-        loadPersistedData()
-        loadUsersFromCoreData()
+        // Disable legacy data loading during Supabase migration
+        print("🔄 SharedDataManager: Legacy features disabled during Supabase migration")
+        // loadPersistedData()  // Commented out
+        // loadUsersFromCoreData()  // Commented out
     }
     
     // MARK: - Persistence
     private func loadPersistedData() {
+        // DISABLED during Supabase migration
+        print("⚠️ Legacy data loading disabled - using Supabase instead")
+        return
+        
+        // All code below is commented out to avoid unreachable code issues
+        /*
         // Load parent-child links
         if let linksData = defaults.object(forKey: Constants.parentChildLinksKey) as? [String: String] {
             parentChildLinks = linksData
@@ -50,9 +58,16 @@ final class SharedDataManager: @unchecked Sendable {
         if let usersData = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
             print("Loaded registered users from defaults: \(usersData)")
         }
+        */
     }
     
     private func loadUsersFromCoreData() {
+        // DISABLED during Supabase migration
+        print("⚠️ Legacy Core Data loading disabled - using Supabase instead")
+        return
+        
+        // All code below is commented out to avoid unreachable code issues
+        /*
         // During transition: simplified user loading
         // In production: use SupabaseDataRepository to load users
         print("Loading users simplified for transition period")
@@ -61,6 +76,7 @@ final class SharedDataManager: @unchecked Sendable {
         if let registeredEmails = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
             print("Registered emails in UserDefaults: \(registeredEmails)")
         }
+        */
     }
     
     private func saveParentChildLinks() {
