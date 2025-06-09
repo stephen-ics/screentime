@@ -159,9 +159,9 @@ extension ChildCard: Equatable {
 
 // MARK: - Mock Data Extension
 
-extension User {
-    static var mockChildren: [User] {
-        // This would normally come from Core Data
+extension Profile {
+    static var mockChildren: [Profile] {
+        // This would normally come from Supabase
         return [
             // Mock children for preview
         ]

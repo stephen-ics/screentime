@@ -2,17 +2,9 @@ import SwiftUI
 import Charts
 
 struct AnalyticsView: View {
-    // MARK: - Environment
-    @Environment(\.managedObjectContext) private var viewContext
-    
     // MARK: - State
-    @FetchRequest(
-        entity: User.entity(),
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.name, ascending: true)],
-        predicate: NSPredicate(format: "userType == %@", Profile.UserType.child.rawValue)
-    ) var children: FetchedResults<User>
-    
-    @State private var selectedChild: User?
+    @State private var children: [Profile] = []
+    @State private var selectedChild: Profile?
     @State private var selectedTimeframe: Timeframe = .week
     @State private var showError = false
     @State private var errorMessage = ""
@@ -23,9 +15,9 @@ struct AnalyticsView: View {
             // Child Picker
             if !children.isEmpty {
                 Picker("Select Child", selection: $selectedChild) {
-                    Text("All Children").tag(nil as User?)
-                    ForEach(children, id: \.objectID) { child in
-                        Text(child.name).tag(child as User?)
+                    Text("All Children").tag(nil as Profile?)
+                    ForEach(children, id: \.id) { child in
+                        Text(child.name).tag(child as Profile?)
                     }
                 }
                 .pickerStyle(SegmentedPickerStyle())
@@ -60,7 +52,7 @@ struct AnalyticsView: View {
                     }
                     
                     // App Usage Chart
-                    if let child = selectedChild {
+                    if selectedChild != nil {
                         ChartCard(title: "App Usage") {
                             ApprovedAppsChart(
                                 apps: [] // TODO: Implement approved apps fetching from Supabase
@@ -71,11 +63,21 @@ struct AnalyticsView: View {
                 .padding()
             }
         }
+        .onAppear {
+            loadChildren()
+        }
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(errorMessage)
         }
+    }
+    
+    // MARK: - Private Methods
+    private func loadChildren() {
+        // TODO: Load children from Supabase
+        // For now, use empty array
+        children = []
     }
     
     // MARK: - Data

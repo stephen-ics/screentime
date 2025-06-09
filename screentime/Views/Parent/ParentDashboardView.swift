@@ -7,7 +7,7 @@ struct ParentDashboardView: View {
     
     // MARK: - Environment Objects
     @EnvironmentObject private var authService: SafeSupabaseAuthService
-    @EnvironmentObject private var dataRepository: SafeSupabaseDataRepository
+    @EnvironmentObject private var dataRepository: SupabaseDataRepository
     @EnvironmentObject private var router: AppRouter
     
     // MARK: - State
@@ -113,44 +113,10 @@ struct ParentDashboardView: View {
     }
 }
 
-// Alternative initialization approach
-struct ParentDashboardView_Alternative: View {
-    
-    // MARK: - Dependencies
-    private let userService: any UserServiceProtocol
-    private let dataRepository: DataRepositoryProtocol
-    
-    // MARK: - State
-    @StateObject private var router = AppRouter()
-    
-    // MARK: - Initialization
-    
-    init(
-        userService: any UserServiceProtocol = UserService(),
-        dataRepository: DataRepositoryProtocol = DataRepository()
-    ) {
-        self.userService = userService
-        self.dataRepository = dataRepository
-    }
-    
-    // MARK: - Body
-    
-    var body: some View {
-        DashboardContainer(
-            userService: userService,
-            dataRepository: dataRepository,
-            router: router
-        )
-        .environmentObject(router)
-    }
-}
-
 // MARK: - Dashboard Container
 
 /// Container view that creates the view model with proper router reference
 struct DashboardContainer: View {
-    let userService: any UserServiceProtocol
-    let dataRepository: DataRepositoryProtocol
     let router: AppRouter
     
     var body: some View {
@@ -582,34 +548,40 @@ struct ModernAddChildView: View {
     private func linkChild() {
         isLoading = true
         
-        DispatchQueue.global().async {
-            let userService = UserService()
-            let currentEmail = self.childEmail
-            
-            guard let parentUser = userService.getCurrentUser(),
-                  let parentEmail = parentUser.email else {
-                DispatchQueue.main.async {
-                    self.errorMessage = "Parent email not found"
+        Task {
+            do {
+                guard let currentProfile = SafeSupabaseAuthService.shared.currentProfile else {
+                    await MainActor.run {
+                        self.errorMessage = "Parent email not found"
+                        self.showError = true
+                        self.isLoading = false
+                    }
+                    return
+                }
+                
+                let parentEmail = currentProfile.email
+                
+                // Call the synchronous method directly
+                let success = SharedDataManager.shared.linkChildToParent(
+                    childEmail: self.childEmail,
+                    parentEmail: parentEmail
+                )
+                
+                await MainActor.run {
+                    if success {
+                        self.showSuccess = true
+                    } else {
+                        self.errorMessage = "Failed to link child account"
+                        self.showError = true
+                    }
+                    self.isLoading = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.errorMessage = "Failed to link child account: \(error.localizedDescription)"
                     self.showError = true
                     self.isLoading = false
                 }
-                return
-            }
-            
-            // Call the synchronous method directly
-            let success = SharedDataManager.shared.linkChildToParent(
-                childEmail: currentEmail,
-                parentEmail: parentEmail
-            )
-            
-            DispatchQueue.main.async {
-                if success {
-                    self.showSuccess = true
-                } else {
-                    self.errorMessage = "Failed to link child account"
-                    self.showError = true
-                }
-                self.isLoading = false
             }
         }
     }
@@ -622,6 +594,6 @@ struct ParentDashboardView_Previews: PreviewProvider {
         ParentDashboardView()
             .environmentObject(AppRouter())
             .environmentObject(SafeSupabaseAuthService.shared)
-            .environmentObject(SafeSupabaseDataRepository.shared)
+            .environmentObject(SupabaseDataRepository.shared)
     }
 } 

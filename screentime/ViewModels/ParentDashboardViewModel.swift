@@ -177,7 +177,7 @@ final class ParentDashboardViewModel: ObservableObject {
     private func loadCurrentUser() async {
         guard let profile = authService.currentProfile else {
             await MainActor.run {
-                state.setError(UserServiceError.notAuthenticated)
+                state.setError(AuthError.unauthorized)
             }
             return
         }
@@ -303,7 +303,7 @@ final class ParentDashboardViewModel: ObservableObject {
     private func loadCurrentUserSync() {
         guard let profile = authService.currentProfile else {
             DispatchQueue.main.async { [weak self] in
-                self?.state.setError(UserServiceError.notAuthenticated)
+                self?.state.setError(AuthError.unauthorized)
             }
             return
         }
