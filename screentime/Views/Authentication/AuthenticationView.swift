@@ -14,6 +14,8 @@ struct AuthenticationView: View {
     @State private var showPassword = false
     @State private var animateGradient = false
     @State private var showDemoMode = false
+    @State private var showEmailVerification = false
+    @State private var emailForVerification = ""
     
     // MARK: - Environment
     @EnvironmentObject private var authService: SafeSupabaseAuthService
@@ -80,6 +82,10 @@ struct AuthenticationView: View {
                         .foregroundColor(.secondary)
                 }
             }
+        }
+        .sheet(isPresented: $showEmailVerification) {
+            EmailVerificationView(email: emailForVerification)
+                .environmentObject(authService)
         }
         .onAppear {
             withAnimation(.linear(duration: 3).repeatForever(autoreverses: true)) {
@@ -441,22 +447,36 @@ struct AuthenticationView: View {
         _Concurrency.Task {
             do {
                 if isSignUp {
-                    try await authService.signUp(
+                    let result = try await authService.signUp(
                         email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                         password: password,
                         name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                         isParent: isParent
                     )
+                    
+                    await MainActor.run {
+                        isLoading = false
+                        
+                        switch result {
+                        case .verified:
+                            // User is immediately verified - success handled by RootView
+                            break
+                        case .pendingVerification(let verificationEmail):
+                            // Show email verification view
+                            emailForVerification = verificationEmail
+                            showEmailVerification = true
+                        }
+                    }
                 } else {
                     try await authService.signIn(
                         email: email.trimmingCharacters(in: .whitespacesAndNewlines), 
                         password: password
                     )
-                }
-                
-                await MainActor.run {
-                    isLoading = false
-                    // Success - the RootView will handle navigation
+                    
+                    await MainActor.run {
+                        isLoading = false
+                        // Success - the RootView will handle navigation
+                    }
                 }
             } catch {
                 await MainActor.run {
