@@ -73,16 +73,10 @@ final class AppTrackingService {
     }
     
     // MARK: - App Restrictions
-    func restrictApps(for user: User) {
+    func restrictApps(for profile: Profile) {
         // TODO: Implement with SupabaseScreenTimeBalance model
-        // Note: User model no longer has screenTimeBalance during migration
-        print("App restrictions not implemented yet for user: \(user.name)")
-        
-        // Original implementation commented out:
-        // guard let balance = user.screenTimeBalance,
-        //       !balance.hasTimeRemaining else {
-        //     return
-        // }
+        // Note: Profile model no longer has screenTimeBalance during migration
+        print("App restrictions not implemented yet for user: \(profile.name)")
         
         // Remove all restrictions for now
         settingsStore.shield.applications = nil
@@ -95,18 +89,11 @@ final class AppTrackingService {
     }
     
     // MARK: - App Usage Tracking
-    func trackAppUsage(for user: User) {
+    func trackAppUsage(for profile: Profile) {
         // TODO: Implement with SupabaseScreenTimeBalance model
-        // Note: User model no longer has screenTimeBalance during migration
-        print("App usage tracking not implemented yet for user: \(user.name)")
+        // Note: Profile model no longer has screenTimeBalance during migration
+        print("App usage tracking not implemented yet for user: \(profile.name)")
         return
-        
-        // Original implementation commented out:
-        // guard let balance = user.screenTimeBalance,
-        //       balance.hasTimeRemaining,
-        //       balance.isTimerActive else {
-        //     return
-        // }
     }
     
     /// Checks if the user is using approved apps
@@ -121,21 +108,21 @@ final class AppTrackingService {
     
     /// Updates screen time balance for a user
     /// - Parameters:
-    ///   - user: The user to update
+    ///   - profile: The profile to update
     ///   - minutes: Minutes to add/subtract
-    private func updateScreenTimeBalance(for user: User, minutes: Int32) {
+    private func updateScreenTimeBalance(for profile: Profile, minutes: Int32) {
         // TODO: Implement screen time balance updates
-        // Note: User model no longer has screenTimeBalance during migration
-        print("Screen time balance update not implemented yet for user: \(user.name)")
+        // Note: Profile model no longer has screenTimeBalance during migration
+        print("Screen time balance update not implemented yet for user: \(profile.name)")
     }
     
     /// Checks if user has exceeded their screen time limit
-    /// - Parameter user: The user to check
+    /// - Parameter profile: The profile to check
     /// - Returns: Bool indicating if limit is exceeded
-    private func hasExceededLimit(for user: User) -> Bool {
+    private func hasExceededLimit(for profile: Profile) -> Bool {
         // TODO: Implement screen time limit checking
-        // Note: User model no longer has screenTimeBalance during migration
-        print("Screen time limit checking not implemented yet for user: \(user.name)")
+        // Note: Profile model no longer has screenTimeBalance during migration
+        print("Screen time limit checking not implemented yet for user: \(profile.name)")
         return false
     }
     
@@ -155,32 +142,23 @@ final class AppTrackingService {
     
     /// Grants additional screen time to a user
     /// - Parameters:
-    ///   - user: The user to grant time to
-    ///   - minutes: Number of minutes to grant
-    func grantAdditionalTime(to user: User, minutes: Int32) {
+    ///   - profile: The profile to grant time to
+    ///   - minutes: Minutes to grant
+    func grantScreenTime(to profile: Profile, minutes: Int32) {
         // TODO: Implement screen time granting with SupabaseScreenTimeBalance
-        updateScreenTimeBalance(for: user, minutes: minutes)
+        print("Screen time grant not implemented yet for user: \(profile.name)")
         
-        // Send notification about granted time
-        let message = "You've been granted \(minutes) additional minutes of screen time!"
         // TODO: Implement notification sending
-        print(message)
+        // NotificationService.shared.scheduleTimeGrantNotification(for: user, minutes: minutes)
     }
     
     /// Removes screen time from a user
     /// - Parameters:
-    ///   - user: The user to remove time from
-    ///   - minutes: Number of minutes to remove
-    func removeScreenTime(from user: User, minutes: Int32) {
+    ///   - profile: The profile to remove time from
+    ///   - minutes: Minutes to remove
+    func removeScreenTime(from profile: Profile, minutes: Int32) {
         // TODO: Implement screen time removal with SupabaseScreenTimeBalance
-        updateScreenTimeBalance(for: user, minutes: -minutes)
-        
-        if hasExceededLimit(for: user) {
-            // Block apps if limit exceeded
-            Task {
-                try? await startMonitoring()
-            }
-        }
+        print("Screen time removal not implemented yet for user: \(profile.name)")
     }
 }
 

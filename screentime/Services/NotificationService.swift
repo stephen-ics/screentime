@@ -131,15 +131,15 @@ final class NotificationService: NSObject {
     }
     
     /// Schedule notification for time requests
-    func scheduleTimeRequestNotification(for user: User, requestedMinutes: Int) async throws {
+    func scheduleTimeRequestNotification(for profile: Profile, requestedMinutes: Int) async throws {
         let content = UNMutableNotificationContent()
         content.title = "Time Request"
-        content.body = "\(user.name) is requesting \(requestedMinutes) more minutes"
+        content.body = "\(profile.name) is requesting \(requestedMinutes) more minutes"
         content.sound = UNNotificationSound.default
         content.categoryIdentifier = Constants.timeRequestCategory
         
         let request = UNNotificationRequest(
-            identifier: "time-request-\(user.id.uuidString)",
+            identifier: "time-request-\(profile.id.uuidString)",
             content: content,
             trigger: nil // Immediate notification
         )

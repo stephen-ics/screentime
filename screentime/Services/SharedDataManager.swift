@@ -7,7 +7,7 @@ final class SharedDataManager: @unchecked Sendable {
     static let shared = SharedDataManager()
     
     // MARK: - Properties
-    private var users: [String: User] = [:] // Email -> User mapping
+    private var users: [String: Profile] = [:] // Email -> Profile mapping
     private var parentChildLinks: [String: String] = [:] // Child email -> Parent email
     
     // Note: Temporarily using a simple storage approach for time requests during transition to Supabase
@@ -31,54 +31,9 @@ final class SharedDataManager: @unchecked Sendable {
     private init() {
         // Disable legacy data loading during Supabase migration
         print("🔄 SharedDataManager: Legacy features disabled during Supabase migration")
-        // loadPersistedData()  // Commented out
-        // loadUsersFromCoreData()  // Commented out
     }
     
     // MARK: - Persistence
-    private func loadPersistedData() {
-        // DISABLED during Supabase migration
-        print("⚠️ Legacy data loading disabled - using Supabase instead")
-        return
-        
-        // All code below is commented out to avoid unreachable code issues
-        /*
-        // Load parent-child links
-        if let linksData = defaults.object(forKey: Constants.parentChildLinksKey) as? [String: String] {
-            parentChildLinks = linksData
-            print("Loaded parent-child links: \(parentChildLinks)")
-        }
-        
-        // Load pending requests (simplified during migration)
-        if let requestsData = defaults.object(forKey: Constants.pendingRequestsKey) as? [String: [String: Any]] {
-            pendingTimeRequests = requestsData
-        }
-        
-        // Load registered users
-        if let usersData = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
-            print("Loaded registered users from defaults: \(usersData)")
-        }
-        */
-    }
-    
-    private func loadUsersFromCoreData() {
-        // DISABLED during Supabase migration
-        print("⚠️ Legacy Core Data loading disabled - using Supabase instead")
-        return
-        
-        // All code below is commented out to avoid unreachable code issues
-        /*
-        // During transition: simplified user loading
-        // In production: use SupabaseDataRepository to load users
-        print("Loading users simplified for transition period")
-        
-        // Check UserDefaults for registered users
-        if let registeredEmails = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
-            print("Registered emails in UserDefaults: \(registeredEmails)")
-        }
-        */
-    }
-    
     private func saveParentChildLinks() {
         defaults.set(parentChildLinks, forKey: Constants.parentChildLinksKey)
         defaults.synchronize()
@@ -102,7 +57,7 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     // MARK: - User Management
-    func registerUser(_ user: User, email: String) {
+    func registerUser(_ user: Profile, email: String) {
         let normalizedEmail = email.lowercased()
         users[normalizedEmail] = user
         
@@ -119,7 +74,6 @@ final class SharedDataManager: @unchecked Sendable {
     
     func refreshUserCache() {
         print("Refreshing user cache...")
-        loadUsersFromCoreData()
         
         // Also check UserDefaults for any users registered on other devices
         if let registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] {
@@ -134,7 +88,7 @@ final class SharedDataManager: @unchecked Sendable {
         }
     }
     
-    func findUser(byEmail email: String) -> User? {
+    func findUser(byEmail email: String) -> Profile? {
         let normalizedEmail = email.lowercased()
         
         // First check in-memory cache
@@ -199,9 +153,9 @@ final class SharedDataManager: @unchecked Sendable {
         return parentChildLinks[childEmail.lowercased()]
     }
     
-    func getChildren(forParentEmail parentEmail: String) -> [User] {
+    func getChildren(forParentEmail parentEmail: String) -> [Profile] {
         let normalizedParentEmail = parentEmail.lowercased()
-        var children: [User] = []
+        var children: [Profile] = []
         
         for (childEmail, linkedParentEmail) in parentChildLinks {
             if linkedParentEmail == normalizedParentEmail {
