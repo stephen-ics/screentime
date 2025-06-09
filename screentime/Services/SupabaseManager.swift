@@ -12,6 +12,7 @@ final class SupabaseManager: @unchecked Sendable {
     #if canImport(Supabase)
     private let supabase: SupabaseClient?
     #endif
+    private let logger = Logger.shared
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Publishers for real-time updates
@@ -40,18 +41,18 @@ final class SupabaseManager: @unchecked Sendable {
                 supabaseURL: config.url,
                 supabaseKey: config.anonKey
             )
-            print("✅ Supabase client initialized successfully")
-            print("🔗 Supabase URL: \(config.url)")
+            logger.dbSuccess("Supabase client initialized successfully")
+            logger.info(.database, "🔗 Supabase URL: \(config.url)")
             Task {
                 await setupRealtimeSubscriptions()
                 await testSupabaseConnection()
             }
         } else {
-            print("⚠️ Supabase configuration not found. Please create SupabaseConfig.plist")
+            logger.dbError("Supabase configuration not found. Please create SupabaseConfig.plist")
             self.supabase = nil
         }
         #else
-        print("⚠️ Supabase package not found. Please add the Supabase Swift package to your project.")
+        logger.warning(.database, "Supabase package not found. Please add the Supabase Swift package to your project.")
         self.supabase = nil
         #endif
     }
@@ -81,12 +82,22 @@ final class SupabaseManager: @unchecked Sendable {
         supabase?.auth
     }
     
-    // Note: Direct database access is deprecated, use client.from() instead
-    @available(*, deprecated, message: "Use client.from() instead of direct database access")
-    var database: PostgrestClient? {
-        // Direct database access is no longer supported in newer Supabase versions
-        // Use client.from("table_name") instead
-        return nil
+    // MARK: - Database Access (New API)
+    var database: SupabaseClient? {
+        // Return the client itself for database operations
+        // Use client.from("table_name") for database queries
+        supabase
+    }
+    
+    /// Check if the Supabase client is properly configured and available
+    var isConfigured: Bool {
+        supabase != nil
+    }
+    
+    /// Test database connectivity
+    func testConnection() async -> Bool {
+        await testSupabaseConnection()
+        return supabase != nil
     }
     #endif
     
@@ -157,11 +168,11 @@ final class SupabaseManager: @unchecked Sendable {
     #if canImport(Supabase)
     func testSupabaseConnection() async {
         guard let supabase = supabase else {
-            print("❌ Supabase client is nil")
+            logger.dbError("Supabase client is nil")
             return
         }
         
-        print("🧪 Testing Supabase connection...")
+        logger.info(.database, "🧪 Testing Supabase connection...")
         
         do {
             // Test database connection by querying profiles table
@@ -172,23 +183,22 @@ final class SupabaseManager: @unchecked Sendable {
                 .execute()
                 .value
             
-            print("✅ Database connection successful! Found \(result.count) profiles")
+            logger.dbSuccess("Database connection successful! Found \(result.count) profiles")
             
             // Test auth connection
             do {
                 let session = try await supabase.auth.session
-                print("✅ Auth session found: \(session.user.email ?? "no email")")
+                logger.dbSuccess("Auth session found: \(session.user.email ?? "no email")")
             } catch {
-                print("ℹ️ No active auth session (this is normal for first run)")
+                logger.info(.database, "ℹ️ No active auth session (this is normal for first run)")
             }
             
         } catch {
-            print("❌ Database connection failed: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
+            logger.dbError("Database connection failed", error: error)
         }
     }
     
-    func testSignUp(email: String, password: String, name: String, isParent: Bool) async throws {
+    func testSignUp(email: String, password: String, name: String, isParent: Bool) async throws -> AuthResponse {
         guard let supabase = supabase else {
             throw SupabaseError.configurationMissing
         }
@@ -196,7 +206,7 @@ final class SupabaseManager: @unchecked Sendable {
         print("🧪 Testing sign up for: \(email)")
         
         do {
-            // Step 1: Sign up with Supabase Auth
+            // Step 1: Sign up with Supabase Auth (this triggers profile creation)
             let authResponse = try await supabase.auth.signUp(
                 email: email,
                 password: password,
@@ -208,50 +218,10 @@ final class SupabaseManager: @unchecked Sendable {
             
             print("✅ Auth signup successful for: \(authResponse.user.email ?? email)")
             print("✅ User ID: \(authResponse.user.id)")
+            print("✅ Database trigger will automatically create profile and time bank")
             
-            // Step 2: Wait a moment for the trigger to create the profile
-            try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-            
-            // Step 3: Verify the profile was created
-            let profiles: [Profile] = try await supabase
-                .from("profiles")
-                .select()
-                .eq("id", value: authResponse.user.id)
-                .execute()
-                .value
-            
-            if profiles.isEmpty {
-                print("⚠️ Profile was not auto-created by trigger, creating manually...")
-                
-                // Manually create the profile
-                let profile = Profile(
-                    id: authResponse.user.id,
-                    email: authResponse.user.email ?? email,
-                    name: name,
-                    userType: isParent ? .parent : .child
-                )
-                
-                try await supabase
-                    .from("profiles")
-                    .insert(profile)
-                    .execute()
-                
-                print("✅ Profile created manually")
-            } else {
-                print("✅ Profile auto-created by trigger: \(profiles[0].name)")
-            }
-            
-            // Step 4: Query to confirm everything worked
-            let finalProfiles: [Profile] = try await supabase
-                .from("profiles")
-                .select()
-                .execute()
-                .value
-            
-            print("✅ Total profiles in database: \(finalProfiles.count)")
-            for profile in finalProfiles {
-                print("   - \(profile.name) (\(profile.email)) - \(profile.userType.rawValue)")
-            }
+            // Return the auth response so the caller can use the session
+            return authResponse
             
         } catch {
             print("❌ Test sign up failed: \(error)")
