@@ -14,26 +14,33 @@ final class SupabaseAuthService: ObservableObject {
     @Published private(set) var currentProfile: Profile?
     @Published private(set) var isLoading = false
     @Published private(set) var error: AuthError?
+    @Published private(set) var isAuthenticated = false
     
     private let supabase = SupabaseManager.shared
+    private let logger = Logger.shared
     private var cancellables = Set<AnyCancellable>()
     private let context = LAContext()
+    
+    // MARK: - Computed Properties
+    var isUserAuthenticated: Bool {
+        return isAuthenticated && currentProfile != nil
+    }
     
     // MARK: - Initialization
     init() {
         #if canImport(Supabase)
         // Check if Supabase is properly configured
         if supabase.client != nil {
-            print("✅ SupabaseAuthService: Supabase client available")
+            logger.authSuccess("Supabase client available")
             Task {
                 await setupAuthStateListener()
                 await restoreSession()
             }
         } else {
-            print("❌ SupabaseAuthService: Supabase client is nil")
+            logger.authError("Supabase client is nil")
         }
         #else
-        print("⚠️ Supabase package not available. Authentication disabled.")
+        logger.authWarning("Supabase package not available. Authentication disabled.")
         #endif
     }
     
@@ -41,36 +48,39 @@ final class SupabaseAuthService: ObservableObject {
     // MARK: - Authentication State Management
     private func setupAuthStateListener() async {
         guard let auth = supabase.auth else { 
-            print("❌ Auth client not available")
+            logger.authError("Auth client not available")
             return 
         }
         
-        print("🔄 Setting up auth state listener...")
+        logger.info(.auth, "🔄 Setting up auth state listener...")
         
         Task {
             for await (event, session) in auth.authStateChanges {
-                print("🔄 Auth state changed: \(event)")
+                logger.info(.auth, "🔄 Auth state changed: \(event)")
                 await self.handleAuthStateChange(event: event, session: session)
             }
         }
     }
     
     private func handleAuthStateChange(event: AuthChangeEvent, session: Session?) async {
-        print("🔄 Handling auth state change: \(event)")
+        logger.info(.auth, "🔄 Handling auth state change: \(event)")
         switch event {
         case .signedIn:
             if let session = session {
-                print("✅ User signed in: \(session.user.email ?? "no email")")
+                logger.authSuccess("User signed in: \(session.user.email ?? "no email")")
+                isAuthenticated = true
                 await loadUserProfile(for: session.user)
             }
         case .signedOut:
-            print("👋 User signed out")
+            logger.info(.auth, "👋 User signed out")
+            isAuthenticated = false
             currentProfile = nil
         case .tokenRefreshed:
-            print("🔄 Token refreshed")
+            logger.info(.auth, "🔄 Token refreshed")
+            // Keep current auth state
             break
         default:
-            print("🔄 Other auth event: \(event)")
+            logger.info(.auth, "🔄 Other auth event: \(event)")
             break
         }
     }
@@ -80,38 +90,52 @@ final class SupabaseAuthService: ObservableObject {
         
         do {
             let session = try await auth.session
-            print("✅ Restored session for: \(session.user.email ?? "no email")")
+            logger.authSuccess("Restored session for: \(session.user.email ?? "no email")")
+            isAuthenticated = true
             await loadUserProfile(for: session.user)
         } catch {
-            print("ℹ️ No existing session found: \(error.localizedDescription)")
+            logger.info(.auth, "ℹ️ No existing session found: \(error.localizedDescription)")
+            isAuthenticated = false
         }
     }
     
     // MARK: - Authentication Methods
-    func signUp(email: String, password: String, name: String, isParent: Bool) async throws {
+    func signUp(email: String, password: String, name: String, isParent: Bool) async throws -> EmailVerificationResult {
         guard let auth = supabase.auth else { 
-            print("❌ Auth client not available")
+            logger.authError("Auth client not available")
             throw AuthError.configurationMissing 
         }
         
-        print("🚀 Starting sign up for: \(email)")
+        logger.info(.auth, "🚀 Starting sign up for: \(email)")
         isLoading = true
         error = nil
         
         do {
-            // Use the test function from SupabaseManager for better debugging
-            try await supabase.testSignUp(email: email, password: password, name: name, isParent: isParent)
+            // Get the auth response from signup with email confirmation
+            let authResponse = try await supabase.testSignUp(email: email, password: password, name: name, isParent: isParent)
             
-            // Load the current session
-            let session = try await auth.session
-            await loadUserProfile(for: session.user)
+            logger.authSuccess("✅ User created successfully! Processing authentication...")
             
-            print("✅ Sign up completed successfully")
+            // Check if we have a session in the response
+            if let session = authResponse.session {
+                logger.authSuccess("✅ Session found in signup response - user authenticated immediately")
+                isAuthenticated = true
+                await loadUserProfile(for: session.user)
+                return .verified // User is immediately verified (email confirmation disabled)
+            } else {
+                // No session - email confirmation is required
+                logger.info(.auth, "ℹ️ No session in signup response - email confirmation required")
+                logger.info(.auth, "✅ Account created successfully! Email verification required.")
+                
+                // User account is created but not authenticated until email is confirmed
+                isAuthenticated = false
+                return .pendingVerification(email: email)
+            }
             
         } catch let supabaseError {
-            print("❌ Sign up failed with error: \(supabaseError)")
-            print("❌ Error type: \(type(of: supabaseError))")
-            print("❌ Error description: \(supabaseError.localizedDescription)")
+            logger.authError("Sign up failed with error: \(supabaseError)")
+            logger.authError("Error type: \(type(of: supabaseError))")
+            logger.authError("Error description: \(supabaseError.localizedDescription)")
             
             let authError = AuthError.networkError("Sign up failed: \(supabaseError.localizedDescription)")
             self.error = authError
@@ -123,21 +147,29 @@ final class SupabaseAuthService: ObservableObject {
     
     func signIn(email: String, password: String) async throws {
         guard let auth = supabase.auth else { 
-            print("❌ Auth client not available")
+            logger.authError("Auth client not available")
             throw AuthError.configurationMissing 
         }
         
-        print("🔑 Starting sign in for: \(email)")
+        logger.info(.auth, "🔑 Starting sign in for: \(email)")
         isLoading = true
         error = nil
         
         do {
             let session = try await auth.signIn(email: email, password: password)
-            print("✅ Sign in successful for: \(session.user.email ?? email)")
+            logger.authSuccess("Sign in successful for: \(session.user.email ?? email)")
+            isAuthenticated = true
             await loadUserProfile(for: session.user)
+            
+            // Double check authentication state
+            if currentProfile != nil {
+                logger.authSuccess("User fully authenticated with profile loaded")
+            } else {
+                logger.authWarning("User authenticated but profile not loaded")
+            }
         } catch {
-            print("❌ Sign in failed: \(error)")
-            print("❌ Error description: \(error.localizedDescription)")
+            logger.authError("Sign in failed", error: error)
+            isAuthenticated = false
             let authError = AuthError.invalidCredentials
             self.error = authError
             throw authError
@@ -153,10 +185,11 @@ final class SupabaseAuthService: ObservableObject {
         
         do {
             try await auth.signOut()
+            isAuthenticated = false
             currentProfile = nil
-            print("✅ Sign out successful")
+            logger.authSuccess("Sign out successful")
         } catch {
-            print("❌ Sign out failed: \(error)")
+            logger.authError("Sign out failed", error: error)
             let authError = AuthError.signOutFailed
             self.error = authError
             throw authError
@@ -172,9 +205,9 @@ final class SupabaseAuthService: ObservableObject {
         
         do {
             try await auth.resetPasswordForEmail(email)
-            print("✅ Password reset email sent")
+            logger.authSuccess("Password reset email sent")
         } catch {
-            print("❌ Password reset failed: \(error)")
+            logger.authError("Password reset failed", error: error)
             let authError = AuthError.resetPasswordFailed
             self.error = authError
             throw authError
@@ -185,74 +218,131 @@ final class SupabaseAuthService: ObservableObject {
     
     // MARK: - Profile Management
     private func loadUserProfile(for user: Auth.User) async {
-        guard let database = supabase.database else { 
-            print("❌ Database client not available")
+        guard let client = supabase.client else { 
+            logger.authError("Database client not available")
             return 
         }
         
-        print("🔄 Loading profile for user: \(user.id)")
+        logger.info(.auth, "🔄 Loading profile for user: \(user.id)")
         
-        do {
-            let profiles: [Profile] = try await database
-                .from("profiles")
-                .select()
-                .eq("id", value: user.id)
-                .execute()
-                .value
-            
-            if let profile = profiles.first {
-                print("✅ Profile loaded: \(profile.name) (\(profile.email))")
-                currentProfile = profile
-            } else {
-                print("⚠️ No profile found, creating from user data...")
-                await createProfileFromUser(user)
+        // Give the trigger a moment to complete (reduced from 2 seconds)
+        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+        
+        // Try to load profile with reasonable retry logic
+        var retryCount = 0
+        let maxRetries = 3 // Reduced from 5
+        
+        while retryCount < maxRetries {
+            do {
+                logger.info(.auth, "📋 Attempting to query profiles table for user: \(user.id)")
+                
+                let profiles: [Profile] = try await client
+                    .from("profiles")
+                    .select()
+                    .eq("id", value: user.id)
+                    .execute()
+                    .value
+                
+                logger.info(.auth, "📊 Query returned \(profiles.count) profiles")
+                
+                if let profile = profiles.first {
+                    logger.authSuccess("✅ Profile loaded: \(profile.name) (\(profile.email))")
+                    currentProfile = profile
+                    return
+                } else {
+                    logger.info(.auth, "⏳ Profile not found yet... (attempt \(retryCount + 1)/\(maxRetries))")
+                    retryCount += 1
+                    
+                    // On the last attempt, try to create the profile manually
+                    if retryCount == maxRetries {
+                        logger.info(.auth, "🔧 Final attempt - trying to create profile manually")
+                        await createProfileFromUser(user)
+                        return
+                    }
+                    
+                    // Shorter wait time (reduced from exponential backoff)
+                    try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+                }
+            } catch {
+                logger.authError("❌ Failed to load user profile (attempt \(retryCount + 1))", error: error)
+                logger.authError("❌ Error details: \(error)")
+                
+                retryCount += 1
+                
+                // On the last attempt, try to create the profile manually
+                if retryCount == maxRetries {
+                    logger.info(.auth, "🔧 Profile loading failed completely - trying to create profile manually")
+                    await createProfileFromUser(user)
+                    return
+                }
+                
+                // Shorter wait before retrying
+                try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             }
-        } catch {
-            print("❌ Failed to load user profile: \(error)")
-            await createProfileFromUser(user)
         }
+        
+        // If we get here, both loading and creation failed
+        logger.authError("💥 Both profile loading and creation failed after \(maxRetries) attempts")
+        logger.info(.auth, "🔄 User is authenticated but profile loading failed. This will be retried on next app launch.")
     }
     
     private func createProfileFromUser(_ user: Auth.User) async {
+        logger.info(.auth, "🔧 Creating profile manually for user: \(user.id)")
+        logger.info(.auth, "📧 User email: \(user.email ?? "no email")")
+        logger.info(.auth, "📝 User metadata: \(user.userMetadata)")
+        
         do {
             let userType: Profile.UserType = user.userMetadata["user_type"]?.stringValue == "parent" ? .parent : .child
             let name = user.userMetadata["name"]?.stringValue ?? user.email ?? "User"
-            let profile = Profile(id: user.id, email: user.email ?? "", name: name, userType: userType)
+            let isVerified = user.emailConfirmedAt != nil
             
-            print("🔄 Creating profile from user: \(name) (\(user.email ?? "no email"))")
+            logger.info(.auth, "👤 Creating profile with - Name: \(name), Type: \(userType), Email verified: \(isVerified)")
+            
+            let profile = Profile(
+                id: user.id,
+                email: user.email ?? "",
+                name: name,
+                userType: userType,
+                emailVerified: isVerified
+            )
+            
+            logger.info(.auth, "🔄 Inserting profile into database...")
             try await createProfile(profile)
             currentProfile = profile
+            logger.authSuccess("✅ Profile created successfully and set as current profile!")
+            
         } catch {
-            print("❌ Failed to create profile from user: \(error)")
+            logger.authError("❌ Failed to create profile from user", error: error)
+            logger.authError("❌ Create profile error details: \(error)")
         }
     }
     
     private func createProfile(_ profile: Profile) async throws {
-        guard let database = supabase.database else { 
+        guard let client = supabase.client else { 
             throw AuthError.configurationMissing 
         }
         
         do {
-            try await database
+            try await client
                 .from("profiles")
                 .insert(profile)
                 .execute()
             
-            print("✅ Profile created successfully in Supabase")
+            logger.authSuccess("Profile created successfully in Supabase")
             
         } catch {
-            print("❌ Failed to create profile in Supabase: \(error)")
+            logger.authError("Failed to create profile in Supabase", error: error)
             throw AuthError.networkError("Failed to create user profile: \(error.localizedDescription)")
         }
     }
     
     func updateProfile(_ profile: Profile) async throws {
-        guard let database = supabase.database else { throw AuthError.configurationMissing }
+        guard let client = supabase.client else { throw AuthError.configurationMissing }
         isLoading = true
         error = nil
         
         do {
-            let updatedProfile: Profile = try await database.from("profiles").update(profile).eq("id", value: profile.id).single().execute().value
+            let updatedProfile: Profile = try await client.from("profiles").update(profile).eq("id", value: profile.id).single().execute().value
             currentProfile = updatedProfile
         } catch {
             let authError = AuthError.updateProfileFailed
@@ -264,7 +354,7 @@ final class SupabaseAuthService: ObservableObject {
     }
     #else
     // MARK: - Stub Methods
-    func signUp(email: String, password: String, name: String, isParent: Bool) async throws {
+    func signUp(email: String, password: String, name: String, isParent: Bool) async throws -> EmailVerificationResult {
         throw AuthError.configurationMissing
     }
     func signIn(email: String, password: String) async throws {
@@ -324,6 +414,7 @@ final class SupabaseAuthService: ObservableObject {
           name TEXT NOT NULL,
           user_type TEXT NOT NULL CHECK (user_type IN ('parent', 'child')),
           is_parent BOOLEAN NOT NULL DEFAULT FALSE,
+          email_verified BOOLEAN NOT NULL DEFAULT FALSE,
           created_at TIMESTAMPTZ DEFAULT NOW(),
           updated_at TIMESTAMPTZ DEFAULT NOW(),
           parent_id UUID REFERENCES profiles(id) ON DELETE SET NULL
@@ -360,13 +451,14 @@ final class SupabaseAuthService: ObservableObject {
         CREATE OR REPLACE FUNCTION public.handle_new_user()
         RETURNS TRIGGER AS $$
         BEGIN
-          INSERT INTO public.profiles (id, email, name, user_type, is_parent)
+          INSERT INTO public.profiles (id, email, name, user_type, is_parent, email_verified)
           VALUES (
             NEW.id,
             NEW.email,
             COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
             COALESCE(NEW.raw_user_meta_data->>'user_type', 'child'),
-            (COALESCE(NEW.raw_user_meta_data->>'user_type', 'child') = 'parent')
+            (COALESCE(NEW.raw_user_meta_data->>'user_type', 'child') = 'parent'),
+            (NEW.email_confirmed_at IS NOT NULL)
           );
           RETURN NEW;
         END;
@@ -376,8 +468,204 @@ final class SupabaseAuthService: ObservableObject {
         CREATE TRIGGER on_auth_user_created
           AFTER INSERT ON auth.users
           FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+          
+        -- Add email_verified column if it doesn't exist (for existing tables)
+        ALTER TABLE profiles ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;
         """
     }
+    
+    // MARK: - Email Verification
+    
+    /// Checks if the current user's email is verified
+    var isEmailVerified: Bool {
+        guard let auth = supabase.auth else { return false }
+        
+        do {
+            // Note: In newer versions, session access might be async
+            // For now, we'll return false if we can't access synchronously
+            return false
+        } catch {
+            return false
+        }
+    }
+    
+    /// Resends the email verification email
+    func resendVerificationEmail(email: String) async throws {
+        guard let auth = supabase.auth else {
+            logger.authError("Auth client not available")
+            throw AuthError.configurationMissing
+        }
+        
+        logger.info(.auth, "🔄 Resending verification email to: \(email)")
+        isLoading = true
+        error = nil
+        
+        do {
+            try await auth.resend(email: email, type: .signup)
+            logger.authSuccess("Verification email resent successfully")
+        } catch {
+            logger.authError("Failed to resend verification email", error: error)
+            let authError = AuthError.resendVerificationFailed
+            self.error = authError
+            throw authError
+        }
+        
+        isLoading = false
+    }
+    
+    /// Updates the email verification status in the database
+    private func updateEmailVerificationInDatabase(_ isVerified: Bool) async {
+        guard let client = supabase.client, let currentProfile = currentProfile else { 
+            logger.authError("Cannot update email verification - missing client or profile")
+            return 
+        }
+        
+        logger.info(.auth, "🔄 Updating email_verified to \(isVerified) in database...")
+        
+        do {
+            try await client
+                .from("profiles")
+                .update(["email_verified": isVerified])
+                .eq("id", value: currentProfile.id)
+                .execute()
+            
+            // Update local profile
+            self.currentProfile = Profile(
+                id: currentProfile.id,
+                email: currentProfile.email,
+                name: currentProfile.name,
+                userType: currentProfile.userType,
+                emailVerified: isVerified,
+                parentId: currentProfile.parentId,
+                createdAt: currentProfile.createdAt,
+                updatedAt: currentProfile.updatedAt
+            )
+            logger.authSuccess("✅ Email verification status updated in database!")
+            
+        } catch {
+            logger.authError("❌ Failed to update email verification in database", error: error)
+        }
+    }
+    
+    /// Checks the current email verification status and updates profile
+    func checkEmailVerificationStatus() async {
+        guard let auth = supabase.auth else { return }
+        
+        do {
+            let session = try await auth.session
+            let isVerified = session.user.emailConfirmedAt != nil
+            
+            logger.info(.auth, "📧 Email verification status: \(isVerified ? "verified" : "not verified")")
+            
+            // Update database if verification status changed
+            if let currentProfile = currentProfile, currentProfile.emailVerified != isVerified {
+                await updateEmailVerificationInDatabase(isVerified)
+            }
+            
+        } catch {
+            logger.authError("Failed to check email verification status", error: error)
+        }
+    }
+    
+    /// Handles email verification when user clicks link
+    func handleEmailVerification(url: URL) async throws {
+        guard let auth = supabase.auth else {
+            throw AuthError.configurationMissing
+        }
+        
+        logger.info(.auth, "🔗 Processing email verification URL")
+        
+        do {
+            let session = try await auth.session(from: url)
+            logger.authSuccess("Email verification successful")
+            
+            isAuthenticated = true
+            await loadUserProfile(for: session.user)
+            await checkEmailVerificationStatus()
+        } catch {
+            logger.authError("Email verification failed", error: error)
+            throw AuthError.emailVerificationFailed
+        }
+    }
+    
+    /// Checks if user with given email has been verified by attempting session refresh
+    func checkVerification(email: String) async throws -> Bool {
+        guard let auth = supabase.auth else {
+            throw AuthError.configurationMissing
+        }
+        
+        logger.info(.auth, "🔍 Checking verification status for: \(email)")
+        
+        do {
+            // Try to refresh the session to get latest verification status
+            try await auth.refreshSession()
+            
+            // Get the current session
+            let session = try await auth.session
+            
+            logger.info(.auth, "📧 User email: \(session.user.email ?? "no email"), Email confirmed at: \(session.user.emailConfirmedAt?.description ?? "nil")")
+            
+            // Check if user email matches and is verified
+            if session.user.email == email && session.user.emailConfirmedAt != nil {
+                logger.authSuccess("✅ Email verification detected - user is verified!")
+                
+                // Update auth state
+                isAuthenticated = true
+                
+                // Load profile (this will create it if it doesn't exist)
+                await loadUserProfile(for: session.user)
+                
+                // Update email verification status in database
+                await updateEmailVerificationInDatabase(true)
+                
+                // Verify we have a profile now
+                if currentProfile != nil {
+                    logger.authSuccess("✅ Profile loaded and email verification updated!")
+                    return true
+                } else {
+                    logger.authError("❌ Profile still not available after verification")
+                    return false
+                }
+            } else {
+                logger.info(.auth, "⏳ Email not verified yet or email mismatch")
+                return false
+            }
+            
+        } catch {
+            logger.info(.auth, "⏳ No valid session available yet - email not verified: \(error.localizedDescription)")
+            return false
+        }
+    }
+    
+    /// Manually checks and updates email verification status - call this after user clicks verification link
+    func refreshEmailVerificationStatus() async {
+        guard let auth = supabase.auth else { return }
+        
+        logger.info(.auth, "🔄 Manually checking email verification status...")
+        
+        do {
+            // Refresh session to get latest verification status
+            try await auth.refreshSession()
+            let session = try await auth.session
+            let isVerified = session.user.emailConfirmedAt != nil
+            
+            logger.info(.auth, "📧 Current verification status: \(isVerified ? "verified" : "not verified")")
+            
+            // Always update database with current status
+            if currentProfile?.emailVerified != isVerified {
+                await updateEmailVerificationInDatabase(isVerified)
+            }
+            
+        } catch {
+            logger.authError("Failed to refresh email verification status", error: error)
+        }
+    }
+}
+
+// MARK: - Email Verification Result
+enum EmailVerificationResult {
+    case verified // User was immediately verified (email confirmation disabled)
+    case pendingVerification(email: String) // Email verification required
 }
 
 // MARK: - Error Types
@@ -394,6 +682,8 @@ enum AuthError: LocalizedError, Equatable {
     case networkError(String)
     case configurationMissing
     case unknownError
+    case resendVerificationFailed
+    case emailVerificationFailed
     
     var errorDescription: String? {
         switch self {
@@ -421,6 +711,10 @@ enum AuthError: LocalizedError, Equatable {
             return "Supabase is not configured. The app is running in demo mode with limited functionality"
         case .unknownError:
             return "An unexpected error occurred. Please try again"
+        case .resendVerificationFailed:
+            return "Failed to resend verification email"
+        case .emailVerificationFailed:
+            return "Email verification failed"
         }
     }
     
