@@ -16,11 +16,11 @@ struct ParentDashboardView: View {
     // MARK: - Initialization
     
     init() {
-        // Initialize with placeholder values - will be updated when environment objects are available
+        // We'll initialize with placeholder router and update it in onAppear
         self._viewModel = StateObject(wrappedValue: ParentDashboardViewModel(
-            userService: UserService(),
-            dataRepository: DataRepository(),
-            router: AppRouter()
+            authService: SafeSupabaseAuthService.shared,
+            dataRepository: SupabaseDataRepository.shared,
+            router: AppRouter() // This will be replaced with the environment router
         ))
     }
     
@@ -34,13 +34,8 @@ struct ParentDashboardView: View {
                 }
         }
         .onAppear {
-            // Update view model with actual environment objects
-            viewModel.updateDependencies(
-                authService: authService,
-                dataRepository: dataRepository,
-                router: router
-            )
-            viewModel.loadData()
+            // Update the view model to use the environment router
+            viewModel.updateRouter(router)
         }
         .sheet(item: $router.presentedSheet) { destination in
             sheetView(for: destination)
@@ -161,8 +156,8 @@ struct DashboardContainer: View {
     var body: some View {
         DashboardTabView(
             viewModel: ParentDashboardViewModel(
-                userService: userService,
-                dataRepository: dataRepository,
+                authService: SafeSupabaseAuthService.shared,
+                dataRepository: SupabaseDataRepository.shared,
                 router: router
             )
         )
@@ -179,7 +174,6 @@ struct DashboardTabView: View {
     
     // MARK: - Properties
     @ObservedObject var viewModel: ParentDashboardViewModel
-    @EnvironmentObject private var router: AppRouter
     
     // MARK: - Body
     
@@ -194,16 +188,11 @@ struct DashboardTabView: View {
                     .tag(tab)
             }
         }
-        .sheet(item: $router.presentedSheet) { destination in
-            sheetView(for: destination)
-                .environmentObject(router)
-        }
-        .fullScreenCover(item: $router.presentedFullScreen) { destination in
-            modalView(for: destination)
-                .environmentObject(router)
-        }
         .onAppear {
-            viewModel.loadData()
+            print("🔘 TAB DEBUG: DashboardTabView appeared")
+            Task {
+                await viewModel.loadData()
+            }
         }
     }
     
@@ -240,51 +229,11 @@ struct DashboardTabView: View {
         Label(tab.title, systemImage: tab.icon)
     }
     
-    // MARK: - Sheet Content
-    
-    @ViewBuilder
-    private func sheetView(for destination: SheetDestination) -> some View {
-        switch destination {
-        case .addChild:
-            AddChildView()
-        case .addTask:
-            AddTaskView()
-        case .timeRequests:
-            TimeRequestsView()
-        case .settings:
-            SettingsView()
-        case .account:
-            AccountView()
-        case .editProfile:
-            EditProfileView()
-        case .changePassword:
-            Text("Change Password - Coming Soon")
-        case .addApprovedApp:
-            ApprovedAppsView(child: Profile.mockChild)
-        case .supabaseSetup:
-            Text("Supabase Setup - Coming Soon")
-        }
-    }
-    
-    @ViewBuilder
-    private func modalView(for destination: FullScreenDestination) -> some View {
-        switch destination {
-        case .authentication:
-            AuthenticationView()
-        case .onboarding:
-            Text("Onboarding - Coming Soon")
-        case .parentalControls:
-            Text("Parental Controls - Coming Soon")
-        case .migrationComplete:
-            Text("Migration Complete!")
-        }
-    }
-    
     // MARK: - Helper Views
     
     @ViewBuilder
     private var addTaskButton: some View {
-        Button(action: { router.presentSheet(.addTask) }) {
+        Button(action: { viewModel.selectTab(.tasks) }) {
             Image(systemName: "plus")
         }
     }
@@ -297,7 +246,6 @@ struct ChildrenListView: View {
     
     // MARK: - Properties
     @ObservedObject var viewModel: ParentDashboardViewModel
-    @EnvironmentObject private var router: AppRouter
     
     // MARK: - Body
     
@@ -531,12 +479,12 @@ struct EmptyChildrenView: View {
 
 /// Modern add child view with improved UX
 struct ModernAddChildView: View {
-    @EnvironmentObject private var router: AppRouter
     @State private var childEmail = ""
     @State private var isLoading = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var showSuccess = false
+    @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         ZStack {
@@ -562,7 +510,7 @@ struct ModernAddChildView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button("Cancel") {
-                    router.dismissSheet()
+                    dismiss()
                 }
             }
         }
@@ -572,7 +520,7 @@ struct ModernAddChildView: View {
             Text(errorMessage)
         }
         .alert("Success", isPresented: $showSuccess) {
-            Button("OK") { router.dismissSheet() }
+            Button("OK") { dismiss() }
         } message: {
             Text("Child account linked successfully!")
         }
