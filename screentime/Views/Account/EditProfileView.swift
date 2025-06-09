@@ -1,14 +1,19 @@
 import SwiftUI
 
 struct EditProfileView: View {
-    @EnvironmentObject private var authService: SupabaseAuthService
+    @EnvironmentObject private var authService: SafeSupabaseAuthService
     @Environment(\.dismiss) private var dismiss
     
     @StateObject private var viewModel: ProfileEditViewModel
     
     init() {
         // We'll initialize the viewModel with a placeholder and update it in onAppear
-        self._viewModel = StateObject(wrappedValue: ProfileEditViewModel(profile: Profile()))
+        self._viewModel = StateObject(wrappedValue: ProfileEditViewModel(profile: Profile(
+            id: UUID(), 
+            email: "", 
+            name: "", 
+            userType: .parent
+        )))
     }
     
     var body: some View {
@@ -76,10 +81,7 @@ struct EditProfileView: View {
     private func loadUserData() {
         guard let profile = authService.currentProfile else { return }
         
-        // Create a new viewModel with the current profile
-        let newViewModel = ProfileEditViewModel(profile: profile)
-        
-        // We need to manually update the properties since we can't reassign @StateObject
+        // Update the viewModel properties directly since we can't reassign @StateObject
         viewModel.name = profile.name
         viewModel.email = profile.email
     }
