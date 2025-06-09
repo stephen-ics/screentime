@@ -7,6 +7,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
     var name: String
     var userType: UserType
     var isParent: Bool
+    var emailVerified: Bool
     var createdAt: Date
     var updatedAt: Date
     var parentId: UUID?
@@ -16,6 +17,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         case id, name, email
         case userType = "user_type"
         case isParent = "is_parent"
+        case emailVerified = "email_verified"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case parentId = "parent_id"
@@ -42,8 +44,22 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         self.name = name
         self.userType = userType
         self.isParent = (userType == .parent)
+        self.emailVerified = false
         self.createdAt = Date()
         self.updatedAt = Date()
+        self.parentId = parentId
+    }
+    
+    // Full initializer with all properties
+    init(id: UUID, email: String, name: String, userType: UserType, emailVerified: Bool = false, parentId: UUID? = nil, createdAt: Date? = nil, updatedAt: Date? = nil) {
+        self.id = id
+        self.email = email
+        self.name = name
+        self.userType = userType
+        self.isParent = (userType == .parent)
+        self.emailVerified = emailVerified
+        self.createdAt = createdAt ?? Date()
+        self.updatedAt = updatedAt ?? Date()
         self.parentId = parentId
     }
     
@@ -54,6 +70,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         self.name = "Preview User"
         self.userType = .child
         self.isParent = false
+        self.emailVerified = false
         self.createdAt = Date()
         self.updatedAt = Date()
         self.parentId = nil
@@ -74,6 +91,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         parentId = try container.decodeIfPresent(UUID.self, forKey: .parentId)
         email = try container.decode(String.self, forKey: .email)
         isParent = try container.decode(Bool.self, forKey: .isParent)
+        emailVerified = try container.decode(Bool.self, forKey: .emailVerified)
     }
     
     // MARK: - Custom Encoder
@@ -88,6 +106,7 @@ struct Profile: Codable, Identifiable, Hashable, Sendable {
         try container.encodeIfPresent(parentId, forKey: .parentId)
         try container.encode(email, forKey: .email)
         try container.encode(isParent, forKey: .isParent)
+        try container.encode(emailVerified, forKey: .emailVerified)
     }
     
     // MARK: - Validation
