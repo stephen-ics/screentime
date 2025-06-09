@@ -12,18 +12,24 @@ final class AppRouter: RouterProtocol {
     /// Navigate to a specific destination
     /// - Parameter destination: The destination to navigate to
     func navigate(to destination: NavigationDestination) {
+        print("🔘 ROUTER DEBUG: navigate called with: \(destination)")
         path.append(destination)
+        print("🔘 ROUTER DEBUG: path count after append: \(path.count)")
     }
     
     /// Present a sheet modal
     /// - Parameter destination: The sheet destination to present
     func presentSheet(_ destination: SheetDestination) {
+        print("🔘 ROUTER DEBUG: presentSheet called with: \(destination.id)")
+        print("🔘 ROUTER DEBUG: Current presentedSheet before: \(presentedSheet?.id ?? "nil")")
         presentedSheet = destination
+        print("🔘 ROUTER DEBUG: Current presentedSheet after: \(presentedSheet?.id ?? "nil")")
     }
     
     /// Present a full screen modal
     /// - Parameter destination: The full screen destination to present
     func presentFullScreen(_ destination: FullScreenDestination) {
+        print("🔘 ROUTER DEBUG: presentFullScreen called with: \(destination.id)")
         presentedFullScreen = destination
     }
     
