@@ -183,12 +183,12 @@ struct DashboardContentView_Previews: PreviewProvider {
     // MARK: - Mock View Models
     
     static var mockViewModelWithChildren: ParentDashboardViewModel {
-        let userService = MockUserService()
-        let dataRepository = MockDataRepository()
+        let authService = SafeSupabaseAuthService.shared
+        let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
         
         let viewModel = ParentDashboardViewModel(
-            userService: userService,
+            authService: authService,
             dataRepository: dataRepository,
             router: router
         )
@@ -199,12 +199,12 @@ struct DashboardContentView_Previews: PreviewProvider {
     }
     
     static var mockViewModelEmpty: ParentDashboardViewModel {
-        let userService = MockUserService()
-        let dataRepository = MockDataRepository()
+        let authService = SafeSupabaseAuthService.shared
+        let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
         
         let viewModel = ParentDashboardViewModel(
-            userService: userService,
+            authService: authService,
             dataRepository: dataRepository,
             router: router
         )
@@ -213,12 +213,12 @@ struct DashboardContentView_Previews: PreviewProvider {
     }
     
     static var mockViewModelLoading: ParentDashboardViewModel {
-        let userService = MockUserService()
-        let dataRepository = MockDataRepository()
+        let authService = SafeSupabaseAuthService.shared
+        let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
         
         let viewModel = ParentDashboardViewModel(
-            userService: userService,
+            authService: authService,
             dataRepository: dataRepository,
             router: router
         )
@@ -228,6 +228,40 @@ struct DashboardContentView_Previews: PreviewProvider {
 }
 
 // MARK: - Mock Services
+
+class MockRouter: RouterProtocol {
+    @Published var path = NavigationPath()
+    @Published var presentedSheet: SheetDestination?
+    @Published var presentedFullScreen: FullScreenDestination?
+    
+    func navigate(to destination: NavigationDestination) {
+        // Mock implementation - no-op for previews
+    }
+    
+    func presentSheet(_ destination: SheetDestination) {
+        // Mock implementation - no-op for previews
+    }
+    
+    func presentFullScreen(_ destination: FullScreenDestination) {
+        // Mock implementation - no-op for previews
+    }
+    
+    func dismiss() {
+        // Mock implementation - no-op for previews
+    }
+    
+    func dismissSheet() {
+        // Mock implementation - no-op for previews
+    }
+    
+    func dismissFullScreen() {
+        // Mock implementation - no-op for previews
+    }
+    
+    func navigateToRoot() {
+        // Mock implementation - no-op for previews
+    }
+}
 
 class MockUserService: UserServiceProtocol {
     @Published var currentUser: User?
@@ -256,18 +290,4 @@ class MockDataRepository: DataRepositoryProtocol {
     }
     func refreshUserCache() async {}
     func findUser(byEmail email: String) async -> User? { nil }
-}
-
-class MockRouter: RouterProtocol {
-    @Published var path = NavigationPath()
-    @Published var presentedSheet: SheetDestination?
-    @Published var presentedFullScreen: FullScreenDestination?
-    
-    func navigate(to destination: NavigationDestination) {}
-    func presentSheet(_ destination: SheetDestination) {}
-    func presentFullScreen(_ destination: FullScreenDestination) {}
-    func dismiss() {}
-    func dismissSheet() {}
-    func dismissFullScreen() {}
-    func navigateToRoot() {}
 } 
