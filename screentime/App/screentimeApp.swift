@@ -19,6 +19,41 @@ struct ScreenTimeApp: App {
                 .environmentObject(router)
                 .environmentObject(authService)
                 .environmentObject(dataRepository)
+                .onOpenURL { url in
+                    handleIncomingURL(url)
+                }
+        }
+    }
+    
+    // MARK: - URL Handling
+    
+    private func handleIncomingURL(_ url: URL) {
+        print("📱 App received URL: \(url.absoluteString)")
+        
+        // Handle email verification URLs
+        if url.absoluteString.contains("auth/confirm") || 
+           url.absoluteString.contains("auth/verify") ||
+           url.absoluteString.contains("code=") {
+            print("📧 Processing email verification URL")
+            
+            Task { @MainActor in
+                do {
+                    try await authService.handleEmailVerification(url: url)
+                    print("✅ Email verification processed successfully")
+                } catch {
+                    print("❌ Email verification failed: \(error.localizedDescription)")
+                }
+            }
+        }
+        // Handle password reset URLs
+        else if url.absoluteString.contains("auth/reset") {
+            print("🔑 Processing password reset URL")
+            // Handle password reset if needed in the future
+        }
+        // Handle other deep links
+        else {
+            print("🔗 Processing general deep link")
+            // Handle other app deep links
         }
     }
 }
@@ -60,15 +95,16 @@ final class SafeSupabaseAuthService: ObservableObject {
         }
     }
     
-    func signUp(email: String, password: String, name: String, isParent: Bool) async throws {
+    func signUp(email: String, password: String, name: String, isParent: Bool) async throws -> EmailVerificationResult {
         isLoading = true
         error = nil
         
         print("🚀 SafeSupabaseAuthService: Using Supabase ONLY for sign up")
         do {
-            try await supabaseService.signUp(email: email, password: password, name: name, isParent: isParent)
+            let result = try await supabaseService.signUp(email: email, password: password, name: name, isParent: isParent)
             await updateState()
             print("✅ Supabase signup successful - User should be in database!")
+            return result
         } catch {
             await updateState()
             print("❌ Supabase signup failed: \(error)")
@@ -114,6 +150,43 @@ final class SafeSupabaseAuthService: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    // MARK: - Email Verification
+    
+    var isEmailVerified: Bool {
+        return supabaseService.isEmailVerified
+    }
+    
+    func resendVerificationEmail(email: String) async throws {
+        try await supabaseService.resendVerificationEmail(email: email)
+        await updateState()
+    }
+    
+    func checkEmailVerificationStatus() async {
+        await supabaseService.checkEmailVerificationStatus()
+        await updateState()
+    }
+    
+    func handleEmailVerification(url: URL) async throws {
+        try await supabaseService.handleEmailVerification(url: url)
+        await updateState()
+    }
+    
+    func checkVerification(email: String) async throws -> Bool {
+        return try await supabaseService.checkVerification(email: email)
+    }
+    
+    func refreshEmailVerificationStatus() async {
+        await supabaseService.refreshEmailVerificationStatus()
+        await updateState()
+    }
+    
+    // MARK: - Profile Management
+    
+    func updateProfile(_ profile: Profile) async throws {
+        try await supabaseService.updateProfile(profile)
+        await updateState()
     }
     
     private func updateState() async {
