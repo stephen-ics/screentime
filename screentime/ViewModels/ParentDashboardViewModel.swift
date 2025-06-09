@@ -11,8 +11,8 @@ final class ParentDashboardViewModel: ObservableObject {
     @Published private(set) var state = DashboardState()
     
     // MARK: - Dependencies
-    private var userService: any UserServiceProtocol
-    private var dataRepository: DataRepositoryProtocol
+    private let authService: SafeSupabaseAuthService
+    private let dataRepository: SupabaseDataRepository
     private var router: any RouterProtocol
     
     // MARK: - Private Properties
@@ -22,16 +22,21 @@ final class ParentDashboardViewModel: ObservableObject {
     // MARK: - Initialization
     
     init(
-        userService: any UserServiceProtocol,
-        dataRepository: DataRepositoryProtocol,
+        authService: SafeSupabaseAuthService = SafeSupabaseAuthService.shared,
+        dataRepository: SupabaseDataRepository = SupabaseDataRepository.shared,
         router: any RouterProtocol
     ) {
-        self.userService = userService
+        self.authService = authService
         self.dataRepository = dataRepository
         self.router = router
         
-        setupBindings()
+        setupSubscriptions()
         setupPeriodicRefresh()
+        
+        // Load initial data
+        Task {
+            await loadData()
+        }
     }
     
     deinit {
@@ -40,26 +45,16 @@ final class ParentDashboardViewModel: ObservableObject {
     
     // MARK: - Dependency Updates
     
-    /// Updates the dependencies with actual environment objects
-    func updateDependencies(
-        authService: SafeSupabaseAuthService,
-        dataRepository: SafeSupabaseDataRepository,
-        router: AppRouter
-    ) {
-        // Update router
-        self.router = router
-        
-        // Clear existing bindings
-        cancellables.removeAll()
-        
-        // Re-setup bindings with new dependencies
-        setupBindings()
+    /// Updates the router reference - called from the view when environment router is available
+    func updateRouter(_ newRouter: any RouterProtocol) {
+        print("🔧 DEBUG: Updating router in view model")
+        self.router = newRouter
     }
     
     // MARK: - Public Actions
     
     /// Loads all dashboard data
-    func loadData() {
+    func loadData() async {
         state.isLoading = true
         
         // Load current user synchronously
@@ -98,6 +93,7 @@ final class ParentDashboardViewModel: ObservableObject {
     /// Handles quick action taps
     /// - Parameter action: The quick action that was tapped
     func handleQuickAction(_ action: QuickAction) {
+        print("🔘 DEBUG: handleQuickAction called with: \(action.rawValue)")
         switch action {
         case .timeRequests:
             viewTimeRequests()
@@ -112,22 +108,30 @@ final class ParentDashboardViewModel: ObservableObject {
     
     /// Navigates to add child view
     func addChild() {
+        print("🔘 DEBUG: addChild() called - presenting sheet")
         router.presentSheet(.addChild)
+        print("🔘 DEBUG: router.presentSheet(.addChild) completed")
     }
     
     /// Navigates to time requests view
     func viewTimeRequests() {
+        print("🔘 DEBUG: viewTimeRequests() called - presenting sheet")
         router.presentSheet(.timeRequests)
+        print("🔘 DEBUG: router.presentSheet(.timeRequests) completed")
     }
     
     /// Navigates to reports view
     func viewReports() {
+        print("🔘 DEBUG: viewReports() called - navigating")
         router.navigate(to: .reports)
+        print("🔘 DEBUG: router.navigate(to: .reports) completed")
     }
     
     /// Opens settings
     func openSettings() {
+        print("🔘 DEBUG: openSettings() called - presenting sheet")
         router.presentSheet(.settings)
+        print("🔘 DEBUG: router.presentSheet(.settings) completed")
     }
     
     /// Navigates to child detail view
@@ -143,33 +147,20 @@ final class ParentDashboardViewModel: ObservableObject {
     
     // MARK: - Private Methods
     
-    private func setupBindings() {
-        // Subscribe to user service changes
-        userService.currentUserPublisher
+    private func setupSubscriptions() {
+        // Subscribe to auth service updates
+        authService.$currentProfile
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] user in
-                if let user = user {
-                    // Convert User to Profile for compatibility during migration
-                    let profile = Profile(
-                        id: UUID(), // Generate temp ID for Core Data users
-                        email: user.email ?? "",
-                        name: user.name,
-                        userType: user.isParent ? .parent : .child
-                    )
-                    self?.state.updateCurrentUser(profile)
-                } else {
-                    self?.state.reset()
-                }
+            .sink { [weak self] profile in
+                self?.updateCurrentUser(profile)
             }
             .store(in: &cancellables)
-        
-        // Subscribe to data repository updates
-        dataRepository.dataUpdatePublisher
+            
+        authService.$error
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self = self else { return }
-                // Handle data update synchronously
-                self.handleDataUpdateSync(event)
+            .compactMap { $0 }
+            .sink { [weak self] error in
+                self?.state.setError(error)
             }
             .store(in: &cancellables)
     }
@@ -184,20 +175,12 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadCurrentUser() async {
-        guard let user = userService.getCurrentUser() else {
+        guard let profile = authService.currentProfile else {
             await MainActor.run {
                 state.setError(UserServiceError.notAuthenticated)
             }
             return
         }
-        
-        // Convert User to Profile for compatibility during migration
-        let profile = Profile(
-            id: UUID(), // Generate temp ID for Core Data users
-            email: user.email ?? "",
-            name: user.name,
-            userType: user.isParent ? .parent : .child
-        )
         
         await MainActor.run {
             state.updateCurrentUser(profile)
@@ -205,23 +188,14 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadChildren() async {
-        guard let user = userService.getCurrentUser() else { return }
+        guard let profile = authService.currentProfile else { return }
         
         do {
-            let children = try await dataRepository.getChildren(for: user.email ?? "")
-            
-            // Convert [User] to [Profile] for compatibility during migration
-            let profiles = children.map { user in
-                Profile(
-                    id: UUID(), // Generate temp ID for Core Data users
-                    email: user.email ?? "",
-                    name: user.name,
-                    userType: user.isParent ? .parent : .child
-                )
-            }
+            // For now, return empty array - child linking not implemented yet
+            let children: [Profile] = []
             
             await MainActor.run {
-                state.linkedChildren = profiles
+                state.linkedChildren = children
             }
         } catch {
             await MainActor.run {
@@ -231,29 +205,22 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadPendingRequests() async {
-        guard let userEmail = userService.getCurrentUser()?.email else {
+        guard let profile = authService.currentProfile else {
             return
         }
         
-        state.isLoadingRequests = true
-        defer { state.isLoadingRequests = false }
-        
-        do {
-            let requests = try await dataRepository.getTimeRequests(for: userEmail)
-            state.pendingRequestsCount = requests.count
-        } catch {
-            print("Failed to load pending requests: \(error)")
-            // Don't show error for this as it's not critical
+        // For now, return 0 pending requests
+        await MainActor.run {
+            state.pendingRequestsCount = 0
+            state.timeRequests = []
         }
     }
     
     private func loadRecentActivities() async {
-        state.isLoadingActivities = true
-        defer { state.isLoadingActivities = false }
-        
-        // Generate mock activities based on current data
-        // In a real app, this would come from the repository
-        state.recentActivities = generateMockActivities()
+        // For now, return empty activities
+        await MainActor.run {
+            state.recentActivities = []
+        }
     }
     
     private func handleDataUpdate(_ event: DataUpdateEvent) async {
@@ -279,21 +246,17 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func handleDataUpdateSync(_ event: DataUpdateEvent) {
-        // Handle data update synchronously where possible
-        switch event {
-        case .childLinked, .timeRequested, .timeApproved, .timeDenied, .taskCompleted:
-            // Trigger a simple refresh that will be handled asynchronously
-            DispatchQueue.main.async { [weak self] in
-                self?.loadData()
-            }
-        default:
-            break
+        // Handle data updates synchronously on main thread
+        Task {
+            await refreshData()
         }
     }
     
     private func refreshPeriodically() {
         // Trigger periodic refresh
-        loadData()
+        Task {
+            await loadData()
+        }
     }
     
     private func generateMockActivities() -> [ActivityItem] {
@@ -338,20 +301,12 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadCurrentUserSync() {
-        guard let user = userService.getCurrentUser() else {
+        guard let profile = authService.currentProfile else {
             DispatchQueue.main.async { [weak self] in
                 self?.state.setError(UserServiceError.notAuthenticated)
             }
             return
         }
-        
-        // Convert User to Profile for compatibility during migration
-        let profile = Profile(
-            id: UUID(), // Generate temp ID for Core Data users
-            email: user.email ?? "",
-            name: user.name,
-            userType: user.isParent ? .parent : .child
-        )
         
         DispatchQueue.main.async { [weak self] in
             self?.state.updateCurrentUser(profile)
@@ -359,63 +314,55 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadChildrenAsync() {
-        guard let userEmail = userService.getCurrentUser()?.email else {
+        guard let profile = authService.currentProfile else {
             return
         }
         
         state.isLoadingChildren = true
         
-        // Use DispatchQueue for background work
-        DispatchQueue.global().async { [weak self] in
+        // For now, return empty children list
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
-            // Call the underlying service directly to avoid async/await complications
-            let coreDataChildren = SharedDataManager.shared.getChildren(forParentEmail: userEmail)
-            
-            // Convert Core Data Users to Supabase Profiles for compatibility
-            let profileChildren = coreDataChildren.map { user in
-                Profile(
-                    id: UUID(), // Generate temp ID for Core Data users
-                    email: user.email ?? "",
-                    name: user.name,
-                    userType: user.isParent ? .parent : .child
-                )
-            }
-            
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.state.linkedChildren = profileChildren
-                self.state.isLoadingChildren = false
-            }
+            self.state.linkedChildren = []
+            self.state.isLoadingChildren = false
         }
     }
     
     private func loadPendingRequestsAsync() {
-        guard let userEmail = userService.getCurrentUser()?.email else {
+        guard let profile = authService.currentProfile else {
             return
         }
         
         state.isLoadingRequests = true
         
-        DispatchQueue.global().async { [weak self] in
+        // For now, return 0 pending requests
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            
-            // Call the underlying service directly
-            let requests = SharedDataManager.shared.getPendingRequests(forParentEmail: userEmail)
-            
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.state.pendingRequestsCount = requests.count
-                self.state.isLoadingRequests = false
-            }
+            self.state.pendingRequestsCount = 0
+            self.state.timeRequests = []
+            self.state.isLoadingRequests = false
         }
     }
     
     private func loadRecentActivitiesAsync() {
         state.isLoadingActivities = true
-        // Generate mock activities based on current data
-        state.recentActivities = generateMockActivities()
-        state.isLoadingActivities = false
+        
+        // For now, return empty activities
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.state.recentActivities = []
+            self.state.isLoadingActivities = false
+        }
+    }
+    
+    private func updateCurrentUser(_ profile: Profile?) {
+        if let profile = profile {
+            state.currentUserName = profile.name
+            state.currentUserEmail = profile.email
+        } else {
+            state.currentUserName = ""
+            state.currentUserEmail = ""
+        }
     }
 }
 
