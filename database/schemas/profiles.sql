@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
     email TEXT NOT NULL,
     name TEXT NOT NULL,
+    username TEXT NOT NULL,
     user_type TEXT NOT NULL CHECK (user_type IN ('parent', 'child')),
     is_parent BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
