@@ -198,36 +198,21 @@ final class SupabaseManager: @unchecked Sendable {
         }
     }
     
-    func testSignUp(email: String, password: String, name: String, isParent: Bool) async throws -> AuthResponse {
-        guard let supabase = supabase else {
+    func testSignUp(email: String, password: String, name: String, role: FamilyProfile.ProfileRole) async throws -> AuthResponse {
+        guard let auth = auth else {
             throw SupabaseError.configurationMissing
         }
         
-        print("🧪 Testing sign up for: \(email)")
+        let metadata: [String: AnyJSON] = [
+            "name": .string(name),
+            "user_type": .string(role == .parent ? "parent" : "child")
+        ]
         
-        do {
-            // Step 1: Sign up with Supabase Auth (this triggers profile creation)
-            let authResponse = try await supabase.auth.signUp(
-                email: email,
-                password: password,
-                data: [
-                    "name": .string(name),
-                    "user_type": .string(isParent ? "parent" : "child")
-                ]
-            )
-            
-            print("✅ Auth signup successful for: \(authResponse.user.email ?? email)")
-            print("✅ User ID: \(authResponse.user.id)")
-            print("✅ Database trigger will automatically create profile and time bank")
-            
-            // Return the auth response so the caller can use the session
-            return authResponse
-            
-        } catch {
-            print("❌ Test sign up failed: \(error)")
-            print("❌ Error details: \(error.localizedDescription)")
-            throw error
-        }
+        return try await auth.signUp(
+            email: email,
+            password: password,
+            data: metadata
+        )
     }
     #endif
 }
