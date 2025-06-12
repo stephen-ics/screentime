@@ -3,6 +3,55 @@ import Combine
 import SwiftUI
 import _Concurrency
 
+// MARK: - Supporting Types
+
+struct Activity: Identifiable, Equatable {
+    let id: UUID
+    let type: ActivityType
+    let timestamp: Date
+    let description: String
+    let childId: UUID?
+    
+    enum ActivityType: String {
+        case taskCompleted = "Task Completed"
+        case timeRequested = "Time Requested"
+        case timeApproved = "Time Approved"
+        case timeDenied = "Time Denied"
+        case childLinked = "Child Linked"
+    }
+}
+
+enum DataUpdateEvent {
+    case childLinked
+    case timeRequested
+    case timeApproved
+    case timeDenied
+    case taskCompleted
+    case profileUpdated
+}
+
+enum AuthError: LocalizedError {
+    case unauthorized
+    case invalidCredentials
+    case networkError
+    case unknown
+    
+    var errorDescription: String? {
+        switch self {
+        case .unauthorized:
+            return "You are not authorized to perform this action"
+        case .invalidCredentials:
+            return "Invalid credentials provided"
+        case .networkError:
+            return "Network error occurred"
+        case .unknown:
+            return "An unknown error occurred"
+        }
+    }
+}
+
+// MARK: - View Model
+
 /// View model for the parent dashboard that handles all business logic and state management
 @MainActor
 final class ParentDashboardViewModel: ObservableObject {
@@ -11,9 +60,9 @@ final class ParentDashboardViewModel: ObservableObject {
     @Published private(set) var state = DashboardState()
     
     // MARK: - Dependencies
-    private let authService: SafeSupabaseAuthService
+    private let familyAuth: FamilyAuthService
     private let dataRepository: SupabaseDataRepository
-    private var router: any RouterProtocol
+    private var router: (any RouterProtocol)?
     
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
@@ -21,12 +70,27 @@ final class ParentDashboardViewModel: ObservableObject {
     
     // MARK: - Initialization
     
+    /// Default initializer for use with environment objects
+    init() {
+        self.familyAuth = FamilyAuthService.shared
+        self.dataRepository = SupabaseDataRepository.shared
+        self.router = nil
+        
+        setupSubscriptions()
+        setupPeriodicRefresh()
+        
+        // Load initial data
+        Task {
+            await loadData()
+        }
+    }
+    
     init(
-        authService: SafeSupabaseAuthService = SafeSupabaseAuthService.shared,
+        familyAuth: FamilyAuthService = FamilyAuthService.shared,
         dataRepository: SupabaseDataRepository = SupabaseDataRepository.shared,
         router: any RouterProtocol
     ) {
-        self.authService = authService
+        self.familyAuth = familyAuth
         self.dataRepository = dataRepository
         self.router = router
         
@@ -109,35 +173,42 @@ final class ParentDashboardViewModel: ObservableObject {
     /// Navigates to add child view
     func addChild() {
         print("🔘 DEBUG: addChild() called - presenting sheet")
-        router.presentSheet(.addChild)
+        router?.presentSheet(.addChild)
         print("🔘 DEBUG: router.presentSheet(.addChild) completed")
     }
     
     /// Navigates to time requests view
     func viewTimeRequests() {
         print("🔘 DEBUG: viewTimeRequests() called - presenting sheet")
-        router.presentSheet(.timeRequests)
+        router?.presentSheet(.timeRequests)
         print("🔘 DEBUG: router.presentSheet(.timeRequests) completed")
     }
     
     /// Navigates to reports view
     func viewReports() {
         print("🔘 DEBUG: viewReports() called - navigating")
-        router.navigate(to: .reports)
+        router?.navigate(to: .reports)
         print("🔘 DEBUG: router.navigate(to: .reports) completed")
     }
     
     /// Opens settings
     func openSettings() {
         print("🔘 DEBUG: openSettings() called - presenting sheet")
-        router.presentSheet(.settings)
+        router?.presentSheet(.settings)
         print("🔘 DEBUG: router.presentSheet(.settings) completed")
     }
     
     /// Navigates to child detail view
     /// - Parameter child: The child to view details for
-    func viewChildDetail(_ child: Profile) {
-        router.navigate(to: .childDetail(child))
+    func goToChildDetail(_ child: FamilyProfile) {
+        // Convert FamilyProfile to Profile for navigation
+        let profile = Profile(
+            id: child.id,
+            email: "", // FamilyProfile does not have email
+            name: child.name,
+            userType: child.role == .parent ? .parent : .child
+        )
+        router?.navigate(to: .childDetail(profile))
     }
     
     /// Clears the current error
@@ -148,15 +219,18 @@ final class ParentDashboardViewModel: ObservableObject {
     // MARK: - Private Methods
     
     private func setupSubscriptions() {
-        // Subscribe to auth service updates
-        authService.$currentProfile
+        familyAuth.$authenticationState
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] profile in
-                self?.updateCurrentUser(profile)
+            .sink { [weak self] state in
+                if case .fullyAuthenticated(let profile) = state {
+                    self?.updateCurrentUser(profile)
+                } else {
+                    self?.updateCurrentUser(nil)
+                }
             }
             .store(in: &cancellables)
-            
-        authService.$error
+        
+        familyAuth.$error
             .receive(on: DispatchQueue.main)
             .compactMap { $0 }
             .sink { [weak self] error in
@@ -174,25 +248,24 @@ final class ParentDashboardViewModel: ObservableObject {
         }
     }
     
-    private func loadCurrentUser() async {
-        guard let profile = authService.currentProfile else {
+    func loadCurrentUser() async {
+        guard let profile = familyAuth.currentProfile else {
             await MainActor.run {
                 state.setError(AuthError.unauthorized)
             }
             return
         }
-        
         await MainActor.run {
             state.updateCurrentUser(profile)
         }
     }
     
-    private func loadChildren() async {
-        guard let profile = authService.currentProfile else { return }
+    func loadChildren() async {
+        guard let profile = familyAuth.currentProfile else { return }
         
         do {
             // For now, return empty array - child linking not implemented yet
-            let children: [Profile] = []
+            let children: [FamilyProfile] = []
             
             await MainActor.run {
                 state.linkedChildren = children
@@ -204,8 +277,8 @@ final class ParentDashboardViewModel: ObservableObject {
         }
     }
     
-    private func loadPendingRequests() async {
-        guard let profile = authService.currentProfile else {
+    func loadPendingRequests() async {
+        guard let profile = familyAuth.currentProfile else {
             return
         }
         
@@ -301,7 +374,7 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadCurrentUserSync() {
-        guard let profile = authService.currentProfile else {
+        guard let profile = familyAuth.currentProfile else {
             DispatchQueue.main.async { [weak self] in
                 self?.state.setError(AuthError.unauthorized)
             }
@@ -314,7 +387,7 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadChildrenAsync() {
-        guard let profile = authService.currentProfile else {
+        guard let profile = familyAuth.currentProfile else {
             return
         }
         
@@ -329,7 +402,7 @@ final class ParentDashboardViewModel: ObservableObject {
     }
     
     private func loadPendingRequestsAsync() {
-        guard let profile = authService.currentProfile else {
+        guard let profile = familyAuth.currentProfile else {
             return
         }
         
@@ -355,10 +428,10 @@ final class ParentDashboardViewModel: ObservableObject {
         }
     }
     
-    private func updateCurrentUser(_ profile: Profile?) {
+    private func updateCurrentUser(_ profile: FamilyProfile?) {
         if let profile = profile {
             state.currentUserName = profile.name
-            state.currentUserEmail = profile.email
+            state.currentUserEmail = "" // FamilyProfile has no email
         } else {
             state.currentUserName = ""
             state.currentUserEmail = ""
