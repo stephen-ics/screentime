@@ -5,6 +5,21 @@ import Supabase
 import Combine
 import SwiftUI
 
+// MARK: - ParentChildLink Model
+struct ParentChildLink: Codable, Identifiable {
+    let id: UUID
+    let parentId: UUID
+    let childId: UUID
+    let isActive: Bool
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case parentId = "parent_id"
+        case childId = "child_id"
+        case isActive = "is_active"
+    }
+}
+
 /// Repository for managing all data operations with Supabase
 @MainActor
 final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
@@ -17,15 +32,15 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
     
     #if canImport(Supabase)
     // MARK: - Profile Operations
-    func getProfile(for userId: UUID) async throws -> Profile {
+    func getFamilyProfile(for userId: UUID) async throws -> FamilyProfile {
         guard let database = supabase.database else {
             throw RepositoryError.configurationMissing
         }
         
-        let profile: Profile = try await database
-            .from("profiles")
+        let profile: FamilyProfile = try await database
+            .from("family_profiles")
             .select()
-            .eq("id", value: userId)
+            .eq("auth_user_id", value: userId)
             .single()
             .execute()
             .value
@@ -33,13 +48,13 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
         return profile
     }
     
-    func updateProfile(_ profile: Profile) async throws -> Profile {
+    func updateFamilyProfile(_ profile: FamilyProfile) async throws -> FamilyProfile {
         guard let database = supabase.database else {
             throw RepositoryError.configurationMissing
         }
         
-        let updatedProfile: Profile = try await database
-            .from("profiles")
+        let updatedProfile: FamilyProfile = try await database
+            .from("family_profiles")
             .update(profile)
             .eq("id", value: profile.id)
             .single()
@@ -485,13 +500,45 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
             .eq("child_id", value: childId)
             .execute()
     }
+    
+    // MARK: - Child Profile Operations
+    func createChildProfile(_ profile: Profile) async throws -> Profile {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        let createdProfile: Profile = try await database
+            .from("profiles")
+            .insert(profile)
+            .single()
+            .execute()
+            .value
+        
+        return createdProfile
+    }
+    
+    func createScreenTimeBalance(_ balance: SupabaseScreenTimeBalance) async throws -> SupabaseScreenTimeBalance {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        let createdBalance: SupabaseScreenTimeBalance = try await database
+            .from("screentime_balances")
+            .insert(balance)
+            .single()
+            .execute()
+            .value
+        
+        return createdBalance
+    }
+    
     #else
     // MARK: - Stub Methods (when Supabase not available)
-    func getProfile(for userId: UUID) async throws -> Profile {
+    func getFamilyProfile(for userId: UUID) async throws -> FamilyProfile {
         throw RepositoryError.configurationMissing
     }
     
-    func updateProfile(_ profile: Profile) async throws -> Profile {
+    func updateFamilyProfile(_ profile: FamilyProfile) async throws -> FamilyProfile {
         throw RepositoryError.configurationMissing
     }
     
