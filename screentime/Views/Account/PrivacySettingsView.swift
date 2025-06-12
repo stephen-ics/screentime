@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct PrivacySettingsView: View {
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @State private var shareUsageData = false
     @State private var analyticsEnabled = false
     @State private var allowDataExport = false

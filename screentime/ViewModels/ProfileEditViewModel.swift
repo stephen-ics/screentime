@@ -4,12 +4,11 @@ import Combine
 /// ViewModel for editing user profiles
 final class ProfileEditViewModel: ObservableObject {
     // The pristine, original model. Keep as private source of truth.
-    private var originalProfile: Profile
+    private var originalProfile: FamilyProfile
 
     // --- Published Properties for UI Binding ---
     // These are what the View will read and write to.
     @Published var name: String
-    @Published var email: String
 
     // --- Published Properties for UI State ---
     @Published var isSaving = false
@@ -19,21 +18,19 @@ final class ProfileEditViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
-    init(profile: Profile) {
+    init(profile: FamilyProfile) {
         self.originalProfile = profile
         
         // Initialize editable fields
         self.name = profile.name
-        self.email = profile.email
 
         // Logic to enable/disable the save button
-        $name.combineLatest($email)
-            .map { [weak self] name, email in
+        $name
+            .map { [weak self] name in
                 // Enable save only if there are changes and fields are valid
                 guard let self = self else { return false }
-                let hasChanges = name != self.originalProfile.name || email != self.originalProfile.email
-                let isValid = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                             !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let hasChanges = name != self.originalProfile.name
+                let isValid = !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 return hasChanges && isValid
             }
             .assign(to: \.canSave, on: self)
@@ -41,10 +38,9 @@ final class ProfileEditViewModel: ObservableObject {
     }
     
     /// Returns the updated profile with current field values
-    var updatedProfile: Profile {
+    var updatedProfile: FamilyProfile {
         originalProfile
             .updatingName(name.trimmingCharacters(in: .whitespacesAndNewlines))
-            .updatingEmail(email.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     func saveChanges() async throws {
@@ -87,7 +83,6 @@ final class ProfileEditViewModel: ObservableObject {
     /// Resets all fields to original values
     func resetFields() {
         name = originalProfile.name
-        email = originalProfile.email
         errorMessage = nil
         showSuccessMessage = false
     }

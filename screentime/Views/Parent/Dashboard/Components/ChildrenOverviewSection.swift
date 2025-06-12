@@ -4,15 +4,15 @@ import SwiftUI
 struct ChildrenOverviewSection: View {
     
     // MARK: - Properties
-    let children: [Profile]
-    let onChildTapped: (Profile) -> Void
+    let children: [FamilyProfile]
+    let onChildTapped: (FamilyProfile) -> Void
     let onSeeAllTapped: () -> Void
     
     // MARK: - Initialization
     
     init(
-        children: [Profile],
-        onChildTapped: @escaping (Profile) -> Void,
+        children: [FamilyProfile],
+        onChildTapped: @escaping (FamilyProfile) -> Void,
         onSeeAllTapped: @escaping () -> Void
     ) {
         self.children = children
@@ -92,7 +92,7 @@ struct ChildrenOverviewSection: View {
 
 // MARK: - Child Card Component
 struct ChildCard: View {
-    let child: Profile
+    let child: FamilyProfile
     let onTap: () -> Void
     
     var body: some View {
@@ -134,7 +134,7 @@ struct ChildCard: View {
 struct ChildrenOverviewSection_Previews: PreviewProvider {
     static var previews: some View {
         ChildrenOverviewSection(
-            children: [Profile.mockChild],
+            children: [FamilyProfile.mockChild],
             onChildTapped: { _ in },
             onSeeAllTapped: { }
         )
@@ -159,8 +159,8 @@ extension ChildCard: Equatable {
 
 // MARK: - Mock Data Extension
 
-extension Profile {
-    static var mockChildren: [Profile] {
+extension FamilyProfile {
+    static var mockChildren: [FamilyProfile] {
         // This would normally come from Supabase
         return [
             // Mock children for preview

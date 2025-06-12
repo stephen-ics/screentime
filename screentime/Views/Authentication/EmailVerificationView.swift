@@ -16,7 +16,7 @@ struct EmailVerificationView: View {
     @State private var isCheckingVerification = false
     
     // MARK: - Environment
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @Environment(\.dismiss) private var dismiss
     
     // MARK: - Services
@@ -105,7 +105,7 @@ struct EmailVerificationView: View {
                     )
                 
                 // Check mark overlay (when verified)
-                if authService.currentProfile?.emailVerified == true {
+                if familyAuth.currentProfile?.emailVerified == true {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 30))
                         .foregroundColor(.green)
@@ -172,7 +172,7 @@ struct EmailVerificationView: View {
             .disabled(isResending || resendCooldown > 0)
             
             // Continue Button (if already verified)
-            if authService.currentProfile?.emailVerified == true {
+            if familyAuth.currentProfile?.emailVerified == true {
                 Button(action: { dismiss() }) {
                     HStack(spacing: DesignSystem.Spacing.small) {
                         Image(systemName: "checkmark.circle.fill")
@@ -259,7 +259,7 @@ struct EmailVerificationView: View {
         
         Task {
             do {
-                try await authService.resendVerificationEmail(email: email)
+                try await familyAuth.resendVerificationEmail(email: email)
                 
                 await MainActor.run {
                     isResending = false
@@ -289,7 +289,7 @@ struct EmailVerificationView: View {
         isCheckingVerification = true
         
         do {
-            let isVerified = try await authService.checkVerification(email: email)
+            let isVerified = try await familyAuth.checkVerification(email: email)
             await MainActor.run {
                 isCheckingVerification = false
                 if isVerified {
@@ -318,8 +318,8 @@ struct EmailVerificationView: View {
 
 struct EmailVerificationView_Previews: PreviewProvider {
     static var previews: some View {
-        EmailVerificationView(email: "user@example.com")
-            .environmentObject(SafeSupabaseAuthService.shared)
+        EmailVerificationView(email: "test@example.com")
+            .environmentObject(FamilyAuthService.shared)
     }
 }
 

@@ -4,16 +4,24 @@ import ManagedSettings
 
 struct ApprovedAppsView: View {
     // MARK: - Properties
-    let childProfile: Profile
+    let child: FamilyProfile
     @StateObject private var viewModel: ApprovedAppsViewModel
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     
     // MARK: - Environment
     @Environment(\.dismiss) private var dismiss
     
-    // MARK: - Initialization
-    init(child: Profile) {
-        self.childProfile = child
-        self._viewModel = StateObject(wrappedValue: ApprovedAppsViewModel(childProfile: child))
+    // MARK: - Initializer
+    init(child: FamilyProfile) {
+        self.child = child
+        // Convert FamilyProfile to Profile for the view model
+        let profile = Profile(
+            id: child.id,
+            email: "", // FamilyProfile does not have email
+            name: child.name,
+            userType: child.role == .parent ? .parent : .child
+        )
+        _viewModel = StateObject(wrappedValue: ApprovedAppsViewModel(childProfile: profile))
     }
     
     // MARK: - Body
@@ -30,33 +38,7 @@ struct ApprovedAppsView: View {
                             .padding(.horizontal)
                         
                         // Apps list
-                        List {
-                            ForEach(Array(viewModel.appsByCategory.keys.sorted(by: { $0.displayName < $1.displayName })), id: \.self) { category in
-                                if let apps = viewModel.appsByCategory[category], !apps.isEmpty {
-                                    Section(header: Text(category.displayName)) {
-                                        ForEach(apps) { app in
-                                            ApprovedAppRow(
-                                                app: app,
-                                                isSelected: viewModel.selectedApps.contains(app),
-                                                onToggle: {
-                                                    viewModel.toggleAppSelection(app)
-                                                },
-                                                onRemove: {
-                                                    Task {
-                                                        await viewModel.removeApprovedApp(app)
-                                                    }
-                                                },
-                                                onUpdateLimit: { minutes in
-                                                    Task {
-                                                        await viewModel.updateDailyLimit(for: app, minutes: minutes)
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        appsList
                         .refreshable {
                             await viewModel.loadApprovedApps()
                         }
@@ -111,6 +93,53 @@ struct ApprovedAppsView: View {
                     .foregroundColor(.white)
             }
         }
+    }
+    
+    // MARK: - Helper Views
+    
+    private var sortedCategories: [SupabaseApprovedApp.AppCategory] {
+        return Array(viewModel.appsByCategory.keys).sorted { $0.displayName < $1.displayName }
+    }
+    
+    private var appsList: some View {
+        List {
+            ForEach(sortedCategories, id: \.self) { category in
+                categorySection(for: category)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func categorySection(for category: SupabaseApprovedApp.AppCategory) -> some View {
+        if let apps = viewModel.appsByCategory[category], !apps.isEmpty {
+            Section {
+                ForEach(apps) { app in
+                    appRow(for: app)
+                }
+            } header: {
+                Text(category.displayName)
+            }
+        }
+    }
+    
+    private func appRow(for app: SupabaseApprovedApp) -> some View {
+        ApprovedAppRow(
+            app: app,
+            isSelected: viewModel.selectedApps.contains(app),
+            onToggle: {
+                viewModel.toggleAppSelection(app)
+            },
+            onRemove: {
+                Task {
+                    await viewModel.removeApprovedApp(app)
+                }
+            },
+            onUpdateLimit: { minutes in
+                Task {
+                    await viewModel.updateDailyLimit(for: app, minutes: minutes)
+                }
+            }
+        )
     }
 }
 
@@ -285,9 +314,7 @@ struct AppPickerView: View {
     }
 }
 
-// MARK: - Preview
-struct ApprovedAppsView_Previews: PreviewProvider {
-    static var previews: some View {
-        ApprovedAppsView(child: Profile.mockChild)
-    }
+#Preview {
+    ApprovedAppsView(child: FamilyProfile.mockChild)
+        .environmentObject(FamilyAuthService.shared)
 } 

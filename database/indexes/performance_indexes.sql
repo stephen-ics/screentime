@@ -15,6 +15,14 @@ CREATE INDEX IF NOT EXISTS idx_profiles_email ON profiles(email);
 CREATE INDEX IF NOT EXISTS idx_profiles_user_type ON profiles(user_type);
 
 -- =====================================================
+-- FAMILY PROFILES TABLE INDEXES
+-- =====================================================
+
+-- Primary key index is automatically created
+CREATE INDEX IF NOT EXISTS idx_family_profiles_auth_user_id ON family_profiles(auth_user_id);
+CREATE INDEX IF NOT EXISTS idx_family_profiles_role ON family_profiles(role);
+
+-- =====================================================
 -- TIME BANKS TABLE INDEXES
 -- =====================================================
 
@@ -51,6 +59,9 @@ CREATE INDEX IF NOT EXISTS idx_unlocked_sessions_started_at ON unlocked_sessions
 CREATE INDEX IF NOT EXISTS idx_unlocked_sessions_active ON unlocked_sessions(user_id, status, ends_at) 
     WHERE status = 'active';
 
+-- Composite index for session history queries
+CREATE INDEX IF NOT EXISTS idx_unlocked_sessions_user_time ON unlocked_sessions(user_id, started_at DESC);
+
 -- =====================================================
 -- TASKS TABLE INDEXES
 -- =====================================================
@@ -62,13 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_tasks_completed_at ON tasks(completed_at);
 CREATE INDEX IF NOT EXISTS idx_tasks_is_approved ON tasks(is_approved);
 CREATE INDEX IF NOT EXISTS idx_tasks_is_recurring ON tasks(is_recurring);
 
--- Composite index for finding pending tasks
-CREATE INDEX IF NOT EXISTS idx_tasks_pending ON tasks(assigned_to, completed_at, is_approved) 
-    WHERE completed_at IS NULL;
-
--- Composite index for finding completed tasks
-CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(assigned_to, completed_at DESC, is_approved) 
-    WHERE completed_at IS NOT NULL;
+-- Composite index for task management queries
+CREATE INDEX IF NOT EXISTS idx_tasks_assigned_status ON tasks(assigned_to, is_approved, completed_at);
 
 -- =====================================================
 -- APPROVED APPS TABLE INDEXES

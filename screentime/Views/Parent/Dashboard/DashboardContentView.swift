@@ -6,6 +6,7 @@ struct DashboardContentView: View {
     
     // MARK: - Properties
     @ObservedObject var viewModel: ParentDashboardViewModel
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     
     // MARK: - Body
     
@@ -101,7 +102,7 @@ struct DashboardContentView: View {
         ChildrenOverviewSection(
             children: viewModel.state.previewChildren,
             onChildTapped: { child in
-                viewModel.viewChildDetail(child)
+                viewModel.goToChildDetail(child)
             },
             onSeeAllTapped: {
                 viewModel.selectTab(.children)
@@ -116,6 +117,28 @@ struct DashboardContentView: View {
             activities: viewModel.state.recentActivitiesPreview
         )
         .equatable()
+    }
+    
+    private func loadData() {
+        Task {
+            do {
+                try await viewModel.loadCurrentUser()
+                try await viewModel.loadChildren()
+                try await viewModel.loadPendingRequests()
+            } catch {
+                print("Failed to load data: \(error)")
+            }
+        }
+    }
+    
+    private func signOut() {
+        Task {
+            do {
+                try await familyAuth.signOut()
+            } catch {
+                print("Failed to sign out: \(error)")
+            }
+        }
     }
 }
 
@@ -183,46 +206,38 @@ struct DashboardContentView_Previews: PreviewProvider {
     // MARK: - Mock View Models
     
     static var mockViewModelWithChildren: ParentDashboardViewModel {
-        let authService = SafeSupabaseAuthService.shared
+        let familyAuth = FamilyAuthService.shared
         let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
-        
         let viewModel = ParentDashboardViewModel(
-            authService: authService,
+            familyAuth: familyAuth,
             dataRepository: dataRepository,
             router: router
         )
-        
-        // Note: In real implementation, we'd need to make state mutable for testing
-        // For now, this is just for preview purposes
         return viewModel
     }
     
     static var mockViewModelEmpty: ParentDashboardViewModel {
-        let authService = SafeSupabaseAuthService.shared
+        let familyAuth = FamilyAuthService.shared
         let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
-        
         let viewModel = ParentDashboardViewModel(
-            authService: authService,
+            familyAuth: familyAuth,
             dataRepository: dataRepository,
             router: router
         )
-        
         return viewModel
     }
     
     static var mockViewModelLoading: ParentDashboardViewModel {
-        let authService = SafeSupabaseAuthService.shared
+        let familyAuth = FamilyAuthService.shared
         let dataRepository = SupabaseDataRepository.shared
         let router = MockRouter()
-        
         let viewModel = ParentDashboardViewModel(
-            authService: authService,
+            familyAuth: familyAuth,
             dataRepository: dataRepository,
             router: router
         )
-        
         return viewModel
     }
 }

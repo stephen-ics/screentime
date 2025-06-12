@@ -1,17 +1,17 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         NavigationView {
             List {
                 Section {
-                    if let profile = authService.currentProfile {
+                    if let profile = familyAuth.currentProfile {
                         HStack {
                             Circle()
-                                .fill(LinearGradient.parentGradient)
+                                .fill(profile.isParent ? Color.blue.gradient : Color.green.gradient)
                                 .frame(width: 50, height: 50)
                                 .overlay(
                                     Text(String(profile.name.prefix(1)).uppercased())
@@ -23,7 +23,7 @@ struct SettingsView: View {
                             VStack(alignment: .leading) {
                                 Text(profile.name)
                                     .font(.headline)
-                                Text(profile.email)
+                                Text(profile.displayRole)
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                             }
@@ -78,7 +78,7 @@ struct SettingsView: View {
     private func signOut() {
         Task {
             do {
-                try await authService.signOut()
+                try await familyAuth.signOut()
             } catch {
                 print("Failed to sign out: \(error)")
             }
@@ -90,6 +90,6 @@ struct SettingsView: View {
 struct SettingsView_Previews: PreviewProvider {
     static var previews: some View {
         SettingsView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 

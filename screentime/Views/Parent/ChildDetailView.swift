@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChildDetailView: View {
-    let child: Profile
+    let child: FamilyProfile
     @StateObject private var viewModel = ChildDetailViewModel()
     @State private var dailyLimit: Int = 120 // Default 2 hours
     @State private var weeklyLimit: Int = 840 // Default 14 hours
@@ -59,10 +59,10 @@ struct ChildDetailView: View {
             
             VStack(spacing: 4) {
                 Text(child.name)
-                    .font(.title2)
+                    .font(.title3)
                     .fontWeight(.semibold)
                 
-                Text(child.userType == .child ? "Child Account" : "Parent Account")
+                Text(child.role == .child ? "Child Account" : "Parent Account")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -178,7 +178,7 @@ final class ChildDetailViewModel: ObservableObject {
     @Published var screenTimeBalance: SupabaseScreenTimeBalance?
     @Published var isLoading = false
     
-    func loadChild(_ child: Profile) {
+    func loadChild(_ child: FamilyProfile) {
         // TODO: Load child data from Supabase
         isLoading = true
         
@@ -229,6 +229,6 @@ struct EditLimitsView: View {
 // MARK: - Previews
 struct ChildDetailView_Previews: PreviewProvider {
     static var previews: some View {
-        ChildDetailView(child: Profile.mockChild)
+        ChildDetailView(child: FamilyProfile.mockChild)
     }
 } 

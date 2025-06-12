@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChildProfileView: View {
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @State private var showingLogoutConfirmation = false
     
     var body: some View {
@@ -42,7 +42,7 @@ struct ChildProfileView: View {
             Button("Sign Out", role: .destructive) {
                 Task {
                     do {
-                        try await authService.signOut()
+                        try await familyAuth.signOut()
                     } catch {
                         // Handle signout error silently for now
                         print("Error signing out: \(error)")
@@ -64,7 +64,7 @@ struct ChildProfileView: View {
             
             // Name and fun greeting
             VStack(spacing: DesignSystem.Spacing.medium) {
-                Text("Hey \(authService.currentProfile?.name ?? "Champion")! 👋")
+                Text("Hey \(familyAuth.currentProfile?.name ?? "Champion")! 👋")
                     .font(DesignSystem.Typography.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(DesignSystem.Colors.primaryText)
@@ -153,7 +153,7 @@ struct ChildProfileView: View {
                 .frame(width: 110, height: 110)
             
             // Initial or avatar with fun styling
-            if let name = authService.currentProfile?.name, !name.isEmpty {
+            if let name = familyAuth.currentProfile?.name, !name.isEmpty {
                 Text(String(name.prefix(1)).uppercased())
                     .font(.system(size: 48, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
@@ -182,14 +182,14 @@ struct ChildProfileView: View {
                 FunProfileInfoRow(
                     emoji: "👤",
                     title: "My Name",
-                    value: authService.currentProfile?.name ?? "Not available",
+                    value: familyAuth.currentProfile?.name ?? "Not available",
                     color: DesignSystem.Colors.childAccent
                 )
                 
                 FunProfileInfoRow(
                     emoji: "📧",
                     title: "Email",
-                    value: authService.currentProfile?.email ?? "Not available",
+                    value: "Not available for child profiles",
                     color: DesignSystem.Colors.info
                 )
                 
@@ -424,6 +424,6 @@ struct FunProfileActionButton: View {
 struct ChildProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ChildProfileView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 

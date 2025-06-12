@@ -27,6 +27,28 @@ CREATE POLICY "Service role can manage profiles" ON profiles
     FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
+-- FAMILY PROFILES TABLE POLICIES
+-- =====================================================
+
+ALTER TABLE family_profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Users can view their own family profiles" ON family_profiles;
+CREATE POLICY "Users can view their own family profiles" ON family_profiles
+    FOR SELECT USING (auth.uid() = auth_user_id);
+
+DROP POLICY IF EXISTS "Users can insert their own family profiles" ON family_profiles;
+CREATE POLICY "Users can insert their own family profiles" ON family_profiles
+    FOR INSERT WITH CHECK (auth.uid() = auth_user_id);
+
+DROP POLICY IF EXISTS "Users can update their own family profiles" ON family_profiles;
+CREATE POLICY "Users can update their own family profiles" ON family_profiles
+    FOR UPDATE USING (auth.uid() = auth_user_id);
+
+DROP POLICY IF EXISTS "Users can delete their own family profiles" ON family_profiles;
+CREATE POLICY "Users can delete their own family profiles" ON family_profiles
+    FOR DELETE USING (auth.uid() = auth_user_id);
+
+-- =====================================================
 -- TIME BANKS TABLE POLICIES
 -- =====================================================
 
@@ -46,13 +68,13 @@ CREATE POLICY "Service role can manage time banks" ON time_banks
 
 ALTER TABLE time_ledger_entries ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view own transactions" ON time_ledger_entries;
-CREATE POLICY "Users can view own transactions" ON time_ledger_entries
+DROP POLICY IF EXISTS "Users can view own ledger entries" ON time_ledger_entries;
+CREATE POLICY "Users can view own ledger entries" ON time_ledger_entries
     FOR SELECT USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "System can insert transactions" ON time_ledger_entries;
-CREATE POLICY "System can insert transactions" ON time_ledger_entries
-    FOR INSERT WITH CHECK (true); -- Allow functions to insert
+DROP POLICY IF EXISTS "Service role can manage ledger entries" ON time_ledger_entries;
+CREATE POLICY "Service role can manage ledger entries" ON time_ledger_entries
+    FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
 -- UNLOCKED SESSIONS TABLE POLICIES
@@ -60,13 +82,13 @@ CREATE POLICY "System can insert transactions" ON time_ledger_entries
 
 ALTER TABLE unlocked_sessions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view own sessions" ON unlocked_sessions;
-CREATE POLICY "Users can view own sessions" ON unlocked_sessions
+DROP POLICY IF EXISTS "Users can view own unlocked sessions" ON unlocked_sessions;
+CREATE POLICY "Users can view own unlocked sessions" ON unlocked_sessions
     FOR SELECT USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can manage own sessions" ON unlocked_sessions;
-CREATE POLICY "Users can manage own sessions" ON unlocked_sessions
-    FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Service role can manage unlocked sessions" ON unlocked_sessions;
+CREATE POLICY "Service role can manage unlocked sessions" ON unlocked_sessions
+    FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
 -- TASKS TABLE POLICIES
@@ -76,21 +98,15 @@ ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view assigned tasks" ON tasks;
 CREATE POLICY "Users can view assigned tasks" ON tasks
-    FOR SELECT USING (auth.uid() = assigned_to OR auth.uid() = created_by);
+    FOR SELECT USING (auth.uid() = assigned_to);
 
-DROP POLICY IF EXISTS "Users can update assigned tasks" ON tasks;
-CREATE POLICY "Users can update assigned tasks" ON tasks
-    FOR UPDATE USING (auth.uid() = assigned_to OR auth.uid() = created_by);
+DROP POLICY IF EXISTS "Users can view created tasks" ON tasks;
+CREATE POLICY "Users can view created tasks" ON tasks
+    FOR SELECT USING (auth.uid() = created_by);
 
-DROP POLICY IF EXISTS "Parents can create tasks" ON tasks;
-CREATE POLICY "Parents can create tasks" ON tasks
-    FOR INSERT WITH CHECK (
-        auth.uid() = created_by AND 
-        EXISTS (
-            SELECT 1 FROM profiles 
-            WHERE id = auth.uid() AND is_parent = true
-        )
-    );
+DROP POLICY IF EXISTS "Service role can manage tasks" ON tasks;
+CREATE POLICY "Service role can manage tasks" ON tasks
+    FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
 -- APPROVED APPS TABLE POLICIES
@@ -98,23 +114,27 @@ CREATE POLICY "Parents can create tasks" ON tasks
 
 ALTER TABLE approved_apps ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can view own apps" ON approved_apps;
-CREATE POLICY "Users can view own apps" ON approved_apps
+DROP POLICY IF EXISTS "Users can view own approved apps" ON approved_apps;
+CREATE POLICY "Users can view own approved apps" ON approved_apps
     FOR SELECT USING (auth.uid() = user_id);
 
-DROP POLICY IF EXISTS "Users can manage own apps" ON approved_apps;
-CREATE POLICY "Users can manage own apps" ON approved_apps
-    FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Service role can manage approved apps" ON approved_apps;
+CREATE POLICY "Service role can manage approved apps" ON approved_apps
+    FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
--- OFFLINE TRANSACTION QUEUE TABLE POLICIES
+-- OFFLINE TRANSACTION QUEUE POLICIES
 -- =====================================================
 
 ALTER TABLE offline_transaction_queue ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Users can manage own queue" ON offline_transaction_queue;
-CREATE POLICY "Users can manage own queue" ON offline_transaction_queue
-    FOR ALL USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view own queued transactions" ON offline_transaction_queue;
+CREATE POLICY "Users can view own queued transactions" ON offline_transaction_queue
+    FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Service role can manage queued transactions" ON offline_transaction_queue;
+CREATE POLICY "Service role can manage queued transactions" ON offline_transaction_queue
+    FOR ALL USING (current_setting('role') = 'service_role');
 
 -- =====================================================
 -- SCHEMA MIGRATIONS TABLE POLICIES (Admin only)
@@ -133,5 +153,5 @@ CREATE POLICY "Service role can manage migrations" ON schema_migrations
 COMMENT ON POLICY "Users can view own profile" ON profiles IS 'Users can only see their own profile data';
 COMMENT ON POLICY "Service role can manage profiles" ON profiles IS 'Service role bypasses RLS for system operations';
 COMMENT ON POLICY "Users can view own time bank" ON time_banks IS 'Users can only see their own time bank balance';
-COMMENT ON POLICY "Users can view own transactions" ON time_ledger_entries IS 'Users can only see their own transaction history';
-COMMENT ON POLICY "Parents can create tasks" ON tasks IS 'Only parent accounts can create tasks for children'; 
+COMMENT ON POLICY "Users can view own ledger entries" ON time_ledger_entries IS 'Users can only see their own transaction history';
+COMMENT ON POLICY "Service role can manage tasks" ON tasks IS 'Service role bypasses RLS for system operations'; 
