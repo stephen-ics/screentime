@@ -2,20 +2,24 @@ import Foundation
 import CoreData
 import Combine
 
-/// Simulates a backend service for sharing data between devices
-final class SharedDataManager: @unchecked Sendable {
+/// Manages shared data between app extensions and main app
+@MainActor
+final class SharedDataManager: ObservableObject {
     static let shared = SharedDataManager()
     
+    private let defaults = UserDefaults(suiteName: "group.com.screentime.app")!
+    private let updateSubject = PassthroughSubject<UpdateType, Never>()
+    
     // MARK: - Properties
-    private var users: [String: Profile] = [:] // Email -> Profile mapping
+    private var users: [String: FamilyProfile] = [:] // Email -> Profile mapping
     private var parentChildLinks: [String: String] = [:] // Child email -> Parent email
     
     // Note: Temporarily using a simple storage approach for time requests during transition to Supabase
     private var pendingTimeRequests: [String: [String: Any]] = [:] // Simplified storage during migration
-    private let updateSubject = PassthroughSubject<DataUpdateEvent, Never>()
+    private var registeredUsers: [String: String] = [:] // Email -> Role mapping
     
-    // Use standard UserDefaults for now (in production, use app groups)
-    private let defaults = UserDefaults.standard
+    // MARK: - Published Properties
+    @Published private(set) var lastUpdate: UpdateType?
     
     // MARK: - Constants
     private enum Constants {
@@ -24,13 +28,20 @@ final class SharedDataManager: @unchecked Sendable {
         static let registeredUsersKey = "registeredUsers"
     }
     
-    var updatePublisher: AnyPublisher<DataUpdateEvent, Never> {
+    var updatePublisher: AnyPublisher<UpdateType, Never> {
         updateSubject.eraseToAnyPublisher()
     }
     
     private init() {
+        loadData()
         // Disable legacy data loading during Supabase migration
         print("🔄 SharedDataManager: Legacy features disabled during Supabase migration")
+    }
+    
+    // MARK: - Data Loading
+    private func loadData() {
+        // Load registered users from UserDefaults
+        registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] ?? [:]
     }
     
     // MARK: - Persistence
@@ -49,7 +60,7 @@ final class SharedDataManager: @unchecked Sendable {
         // Save a simple mapping of emails to user types for cross-device discovery
         var registeredUsers: [String: String] = [:]
         for (email, user) in users {
-            registeredUsers[email] = user.isParent ? "parent" : "child"
+            registeredUsers[email] = user.role == .parent ? "parent" : "child"
         }
         defaults.set(registeredUsers, forKey: Constants.registeredUsersKey)
         defaults.synchronize()
@@ -57,19 +68,28 @@ final class SharedDataManager: @unchecked Sendable {
     }
     
     // MARK: - User Management
-    func registerUser(_ user: Profile, email: String) {
-        let normalizedEmail = email.lowercased()
-        users[normalizedEmail] = user
-        
+    func registerUser(_ user: FamilyProfile) {
+        let key = user.id.uuidString
+        users[key] = user
         // Save to UserDefaults for cross-device discovery
         var registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] ?? [:]
-        registeredUsers[normalizedEmail] = user.isParent ? "parent" : "child"
+        registeredUsers[key] = user.role == .parent ? "parent" : "child"
         defaults.set(registeredUsers, forKey: Constants.registeredUsersKey)
         defaults.synchronize()
-        
-        print("Registered user: \(user.name) with email: \(normalizedEmail) (isParent: \(user.isParent))")
-        
-        updateSubject.send(.userRegistered(email: normalizedEmail))
+        print("Registered user: \(user.name) with id: \(key) (role: \(user.role))")
+        updateSubject.send(.userRegistered(id: user.id))
+    }
+    
+    func registerUser(id: UUID, role: FamilyProfile.ProfileRole) {
+        let key = id.uuidString
+        users[key] = FamilyProfile(id: id, authUserId: UUID(), name: "", role: role)
+        // Save to UserDefaults for cross-device discovery
+        var registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String] ?? [:]
+        registeredUsers[key] = role == .parent ? "parent" : "child"
+        defaults.set(registeredUsers, forKey: Constants.registeredUsersKey)
+        defaults.synchronize()
+        print("Registered user with id: \(key) (role: \(role))")
+        updateSubject.send(.userRegistered(id: id))
     }
     
     func refreshUserCache() {
@@ -88,102 +108,60 @@ final class SharedDataManager: @unchecked Sendable {
         }
     }
     
-    func findUser(byEmail email: String) -> Profile? {
-        let normalizedEmail = email.lowercased()
-        
-        // First check in-memory cache
-        if let user = users[normalizedEmail] {
-            print("Found user in cache: \(user.name)")
-            return user
-        }
-        
-        // During transition: simplified user lookup
-        // In production: use SupabaseDataRepository
-        
-        // Check if user is registered on another device
-        if let registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String],
-           let userType = registeredUsers[normalizedEmail] {
-            print("User \(email) is registered as \(userType) but not found locally - they may be on another device")
-            
-            // In a real app, we would fetch from a backend here
-            // For now, return nil but log that they exist
-            return nil
-        }
-        
-        print("User not found: \(email)")
-        return nil
+    func findUser(byId id: UUID) -> FamilyProfile? {
+        let key = id.uuidString
+        return users[key]
     }
     
     // MARK: - Parent-Child Linking
-    func linkChildToParent(childEmail: String, parentEmail: String) -> Bool {
-        let normalizedChildEmail = childEmail.lowercased()
-        let normalizedParentEmail = parentEmail.lowercased()
-        
-        print("Attempting to link child \(normalizedChildEmail) to parent \(normalizedParentEmail)")
-        
-        // Check if both users exist
-        guard let parent = findUser(byEmail: normalizedParentEmail),
-              parent.isParent else {
-            print("Parent not found or not a parent account: \(normalizedParentEmail)")
+    // Use UUIDs for linking
+    func linkChildToParent(childId: UUID, parentId: UUID) -> Bool {
+        print("Attempting to link child \(childId) to parent \(parentId)")
+        guard let parent = findUser(byId: parentId), parent.role == .parent else {
+            print("Parent not found or not a parent account: \(parentId)")
             return false
         }
-        
-        // For the child, check if they're registered even if not in local CoreData
-        if let registeredUsers = defaults.object(forKey: Constants.registeredUsersKey) as? [String: String],
-           let userType = registeredUsers[normalizedChildEmail],
-           userType == "child" {
-            // Child is registered, proceed with linking
-            parentChildLinks[normalizedChildEmail] = normalizedParentEmail
-            saveParentChildLinks()
-            
-            print("Successfully linked child \(normalizedChildEmail) to parent \(normalizedParentEmail)")
-            
-            // During transition: skip Core Data relationship updates
-            // In production: use SupabaseDataRepository
-            
-            updateSubject.send(.childLinked(childEmail: normalizedChildEmail, parentEmail: normalizedParentEmail))
-            return true
-        }
-        
-        print("Child not found or not a child account: \(normalizedChildEmail)")
-        return false
+        // Link child to parent
+        parentChildLinks[childId.uuidString] = parentId.uuidString
+        saveParentChildLinks()
+        print("Successfully linked child \(childId) to parent \(parentId)")
+        updateSubject.send(.userUpdated(id: childId))
+        return true
     }
     
-    func getParentEmail(forChildEmail childEmail: String) -> String? {
-        return parentChildLinks[childEmail.lowercased()]
+    func getParentId(forChildId childId: UUID) -> UUID? {
+        guard let parentIdString = parentChildLinks[childId.uuidString] else { return nil }
+        return UUID(uuidString: parentIdString)
     }
     
-    func getChildren(forParentEmail parentEmail: String) -> [Profile] {
-        let normalizedParentEmail = parentEmail.lowercased()
-        var children: [Profile] = []
-        
-        for (childEmail, linkedParentEmail) in parentChildLinks {
-            if linkedParentEmail == normalizedParentEmail {
-                if let child = findUser(byEmail: childEmail) {
-                    children.append(child)
-                } else {
-                    print("Linked child \(childEmail) not found locally")
+    func getChildren(forParentId parentId: UUID) -> [FamilyProfile] {
+        var children: [FamilyProfile] = []
+        for (key, user) in users {
+            if let userType = registeredUsers[key], userType == "child" {
+                if let linkedParentId = getParentId(forChildId: user.id), linkedParentId == parentId {
+                    children.append(user)
                 }
             }
         }
-        
         return children
     }
     
     // MARK: - Task Management
     func notifyTaskAssigned(_ task: SupabaseTask, toChildEmail childEmail: String) {
-        updateSubject.send(.taskAssigned(task: task, childEmail: childEmail))
+        updateSubject.send(.userUpdated(id: UUID(uuidString: childEmail)!))
     }
     
     func notifyTaskCompleted(_ task: SupabaseTask, byChildEmail childEmail: String) {
-        if let parentEmail = getParentEmail(forChildEmail: childEmail) {
-            updateSubject.send(.taskCompleted(task: task, childEmail: childEmail, parentEmail: parentEmail))
+        if let childId = UUID(uuidString: childEmail),
+           let parentId = getParentId(forChildId: childId) {
+            updateSubject.send(.userUpdated(id: parentId))
         }
     }
     
     // MARK: - Time Management (Simplified during migration to Supabase)
     func requestMoreTime(fromChildEmail childEmail: String, minutes: Int32) -> String? {
-        guard let parentEmail = getParentEmail(forChildEmail: childEmail) else {
+        guard let childId = UUID(uuidString: childEmail),
+              let parentId = getParentId(forChildId: childId) else {
             print("No parent linked for child: \(childEmail)")
             return nil
         }
@@ -192,7 +170,7 @@ final class SharedDataManager: @unchecked Sendable {
         let requestData: [String: Any] = [
             "id": requestId,
             "childEmail": childEmail,
-            "parentEmail": parentEmail,
+            "parentId": parentId.uuidString,
             "requestedMinutes": minutes,
             "timestamp": Date().timeIntervalSince1970
         ]
@@ -201,9 +179,9 @@ final class SharedDataManager: @unchecked Sendable {
         savePendingRequests()
         
         // Create a simplified event for backwards compatibility
-        updateSubject.send(.timeRequested(requestId: requestId, childEmail: childEmail, parentEmail: parentEmail, minutes: minutes))
+        updateSubject.send(.timeRequested(requestId: requestId, childId: childId, parentId: parentId, minutes: minutes))
         
-        print("Created time request from \(childEmail) to \(parentEmail)")
+        print("Created time request from \(childEmail) to parent \(parentId)")
         return requestId
     }
     
@@ -229,7 +207,7 @@ final class SharedDataManager: @unchecked Sendable {
         
         pendingTimeRequests.removeValue(forKey: requestId)
         savePendingRequests()
-        updateSubject.send(.timeApproved(requestId: requestId, childEmail: childEmail, minutes: minutes))
+        updateSubject.send(.timeApproved(requestId: requestId, childId: UUID(uuidString: childEmail)!, minutes: minutes))
         
         return true
     }
@@ -242,23 +220,31 @@ final class SharedDataManager: @unchecked Sendable {
         }
         
         savePendingRequests()
-        updateSubject.send(.timeDenied(requestId: requestId, childEmail: childEmail, minutes: minutes))
+        updateSubject.send(.timeDenied(requestId: requestId, childId: UUID(uuidString: childEmail)!, minutes: minutes))
         return true
     }
     
     func updateScreenTime(forChildEmail childEmail: String, minutes: Int32) {
-        updateSubject.send(.screenTimeUpdated(childEmail: childEmail, minutes: minutes))
+        updateSubject.send(.userUpdated(id: UUID(uuidString: childEmail)!))
+    }
+    
+    // MARK: - Update Types
+    enum UpdateType {
+        case userRegistered(id: UUID)
+        case userUpdated(id: UUID)
+        case userDeleted(id: UUID)
+        case timeRequested(requestId: String, childId: UUID, parentId: UUID, minutes: Int32)
+        case timeApproved(requestId: String, childId: UUID, minutes: Int32)
+        case timeDenied(requestId: String, childId: UUID, minutes: Int32)
     }
 }
 
 // MARK: - Data Update Events
-enum DataUpdateEvent {
-    case userRegistered(email: String)
-    case childLinked(childEmail: String, parentEmail: String)
-    case taskAssigned(task: SupabaseTask, childEmail: String)
-    case taskCompleted(task: SupabaseTask, childEmail: String, parentEmail: String)
-    case timeRequested(requestId: String, childEmail: String, parentEmail: String, minutes: Int32)
-    case timeApproved(requestId: String, childEmail: String, minutes: Int32)
-    case timeDenied(requestId: String, childEmail: String, minutes: Int32)
-    case screenTimeUpdated(childEmail: String, minutes: Int32)
+enum UpdateType {
+    case userRegistered(id: UUID)
+    case userUpdated(id: UUID)
+    case userDeleted(id: UUID)
+    case timeRequested(requestId: String, childId: UUID, parentId: UUID, minutes: Int32)
+    case timeApproved(requestId: String, childId: UUID, minutes: Int32)
+    case timeDenied(requestId: String, childId: UUID, minutes: Int32)
 } 

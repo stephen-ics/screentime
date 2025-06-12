@@ -131,20 +131,20 @@ final class NotificationService: NSObject {
     }
     
     /// Schedule notification for time requests
-    func scheduleTimeRequestNotification(for profile: Profile, requestedMinutes: Int) async throws {
+    func scheduleTimeRequestNotification(for profile: FamilyProfile, requestedMinutes: Int) async throws {
         let content = UNMutableNotificationContent()
-        content.title = "Time Request"
+        content.title = "Screen Time Request"
         content.body = "\(profile.name) is requesting \(requestedMinutes) more minutes"
-        content.sound = UNNotificationSound.default
-        content.categoryIdentifier = Constants.timeRequestCategory
+        content.sound = .default
         
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)
         let request = UNNotificationRequest(
             identifier: "time-request-\(profile.id.uuidString)",
             content: content,
-            trigger: nil // Immediate notification
+            trigger: trigger
         )
         
-        try await notificationCenter.add(request)
+        try await UNUserNotificationCenter.current().add(request)
     }
     
     /// Schedule notification for low screen time

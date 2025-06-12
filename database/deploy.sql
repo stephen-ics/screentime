@@ -14,6 +14,7 @@ BEGIN;
 
 \echo '📦 Step 1: Running migrations...'
 \i migrations/001_initial_setup.sql
+\i migrations/002_family_auth_migration.sql
 
 -- =====================================================
 -- STEP 2: SCHEMAS (Create all tables)
@@ -89,7 +90,7 @@ BEGIN
     SELECT COUNT(*) INTO function_count
     FROM information_schema.routines 
     WHERE routine_schema = 'public' 
-      AND routine_name IN ('update_time_bank', 'start_unlocked_session', 'process_offline_transactions', 'handle_new_user');
+      AND routine_name IN ('update_time_bank', 'start_unlocked_session', 'process_offline_transactions', 'handle_new_family_user');
     
     -- Count policies
     SELECT COUNT(*) INTO policy_count
