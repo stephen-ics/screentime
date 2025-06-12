@@ -18,7 +18,8 @@ BEGIN
         NEW.email,
         COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
         COALESCE(NEW.raw_user_meta_data->>'user_type', 'child'),
-        (COALESCE(NEW.raw_user_meta_data->>'user_type', 'child') = 'parent')
+        (COALESCE(NEW.raw_user_meta_data->>'user_type', 'child') = 'parent'),
+        (NEW.email_confirmed_at IS NOT NULL)
     );
     
     -- Create time bank for the user
