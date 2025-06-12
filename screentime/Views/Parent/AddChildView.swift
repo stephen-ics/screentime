@@ -2,16 +2,13 @@ import SwiftUI
 
 struct AddChildView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
-    @EnvironmentObject private var dataRepository: SafeSupabaseDataRepository
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     
     @State private var childName: String = ""
-    @State private var childEmail: String = ""
-    @State private var deviceName: String = ""
+    @State private var selectedAge: Int = 10
     @State private var allowedScreenTime: Int = 120 // minutes
     @State private var bedtime: Date = Calendar.current.date(bySettingHour: 20, minute: 0, second: 0, of: Date()) ?? Date()
     @State private var wakeTime: Date = Calendar.current.date(bySettingHour: 7, minute: 0, second: 0, of: Date()) ?? Date()
-    @State private var selectedAge: Int = 10
     @State private var isLoading = false
     @State private var showingAlert = false
     @State private var alertMessage = ""
@@ -21,19 +18,12 @@ struct AddChildView: View {
             Form {
                 Section("Child Information") {
                     TextField("Child's Name", text: $childName)
-                    TextField("Child's Email (Optional)", text: $childEmail)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
                     
                     Picker("Age", selection: $selectedAge) {
                         ForEach(3...17, id: \.self) { age in
                             Text("\(age) years old").tag(age)
                         }
                     }
-                }
-                
-                Section("Device Information") {
-                    TextField("Device Name (e.g., iPad, iPhone)", text: $deviceName)
                 }
                 
                 Section("Screen Time Settings") {
@@ -102,7 +92,7 @@ struct AddChildView: View {
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(1.2)
                         
-                        Text("Setting up child account...")
+                        Text("Creating child profile...")
                             .foregroundColor(.white)
                             .font(.headline)
                     }
@@ -139,31 +129,8 @@ struct AddChildView: View {
         
         Task {
             do {
-                // Create a child profile
-                let childProfile = Profile(
-                    id: UUID(),
-                    email: childEmail.isEmpty ? "\(childName.lowercased().replacingOccurrences(of: " ", with: "."))@child.local" : childEmail,
-                    name: childName,
-                    userType: .child,
-                    parentId: authService.currentProfile?.id
-                )
-                
-                // Create screen time balance using correct property names
-                let screenTimeBalance = SupabaseScreenTimeBalance(
-                    userId: childProfile.id,
-                    availableSeconds: Double(allowedScreenTime * 60), // Convert minutes to seconds
-                    dailyLimitSeconds: Double(allowedScreenTime * 60), // Convert minutes to seconds
-                    weeklyLimitSeconds: Double(allowedScreenTime * 60 * 7) // 7 days worth
-                )
-                
-                // In a real app, you would:
-                // 1. Create the child profile in Supabase
-                // 2. Set up screen time limits
-                // 3. Configure default approved apps
-                // 4. Send invitation email if email provided
-                
-                // For demo purposes, we'll just simulate success
-                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                // Create child profile using FamilyAuthService
+                try await familyAuth.createChildProfile(name: childName.trimmingCharacters(in: .whitespacesAndNewlines))
                 
                 await MainActor.run {
                     isLoading = false
@@ -173,7 +140,9 @@ struct AddChildView: View {
                     • Daily screen time: \(allowedScreenTime / 60)h \(allowedScreenTime % 60)m
                     • Bedtime: \(formatTime(bedtime))
                     • Wake time: \(formatTime(wakeTime))
-                    • \(defaultApps.count) default apps approved
+                    • \(defaultApps.count) default apps will be approved
+                    
+                    Note: Screen time settings and app management will be configured in the full app.
                     """
                     showingAlert = true
                 }
@@ -204,7 +173,6 @@ struct DefaultApp {
 struct AddChildView_Previews: PreviewProvider {
     static var previews: some View {
         AddChildView()
-            .environmentObject(SafeSupabaseAuthService.shared)
-            .environmentObject(SafeSupabaseDataRepository.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 
