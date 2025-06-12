@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ChildMainTabView: View {
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @State private var selectedTab = 0
     
     var body: some View {
@@ -53,6 +53,6 @@ struct ChildMainTabView: View {
 struct ChildMainTabView_Previews: PreviewProvider {
     static var previews: some View {
         ChildMainTabView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 

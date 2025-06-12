@@ -155,7 +155,7 @@ final class ChildDashboardViewModel: ObservableObject {
 
 struct ChildDashboardView: View {
     @StateObject private var viewModel = ChildDashboardViewModel()
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @Binding var selectedTab: Int
     @State private var selectedPage = 0
     
@@ -195,37 +195,9 @@ struct ChildDashboardView: View {
             )
             .navigationTitle("🎮 My Dashboard")
             .navigationBarTitleDisplayMode(.large)
-            // ⚠️ TEMPORARY: Sign out button for testing - REMOVE BEFORE PRODUCTION ⚠️
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        Task {
-                            do {
-                                try await authService.signOut()
-                            } catch {
-                                print("Sign out error: \(error)")
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "rectangle.portrait.and.arrow.right")
-                                .font(.caption)
-                            Text("Sign Out")
-                                .font(.caption)
-                                .fontWeight(.medium)
-                        }
-                        .foregroundColor(.red)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(.red.opacity(0.1))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(.red.opacity(0.3), lineWidth: 1)
-                        )
-                    }
+                    profileSwitchButton
                 }
             }
             .sheet(isPresented: $viewModel.showingTimeRequest) {
@@ -242,6 +214,34 @@ struct ChildDashboardView: View {
         }
         .task {
             await viewModel.loadData()
+        }
+    }
+    
+    // MARK: - Profile Switch Button
+    private var profileSwitchButton: some View {
+        Button(action: {
+            Task {
+                try? await familyAuth.switchToProfileSelectionWithSecurity()
+            }
+        }) {
+            if let currentProfile = familyAuth.currentProfile {
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.green.opacity(0.2))
+                            .frame(width: 28, height: 28)
+                        
+                        Text(String(currentProfile.name.prefix(1)))
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
+                    }
+                    
+                    Image(systemName: "lock.fill")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
         }
     }
     
@@ -412,7 +412,7 @@ struct ChildDashboardView: View {
     private var funHeaderSection: some View {
         HStack {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                Text("Hey \(authService.currentProfile?.name ?? "Champion")! 👋")
+                Text("Hey \(familyAuth.currentProfile?.name ?? "Champion")! 👋")
                     .font(DesignSystem.Typography.title2)
                     .fontWeight(.bold)
                     .foregroundColor(DesignSystem.Colors.primaryText)
@@ -992,6 +992,6 @@ extension View {
 struct ChildDashboardView_Previews: PreviewProvider {
     static var previews: some View {
         ChildDashboardView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 
