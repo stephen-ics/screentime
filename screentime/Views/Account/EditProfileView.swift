@@ -1,43 +1,50 @@
 import SwiftUI
 
 struct EditProfileView: View {
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @Environment(\.dismiss) private var dismiss
     
     @StateObject private var viewModel: ProfileEditViewModel
     
     init() {
         // We'll initialize the viewModel with a placeholder and update it in onAppear
-        self._viewModel = StateObject(wrappedValue: ProfileEditViewModel(profile: Profile(
-            id: UUID(), 
-            email: "", 
-            name: "", 
-            userType: .parent
+        self._viewModel = StateObject(wrappedValue: ProfileEditViewModel(profile: FamilyProfile(
+            id: UUID(),
+            authUserId: UUID(),
+            name: "",
+            role: .parent,
+            createdAt: Date(),
+            updatedAt: Date(),
+            emailVerified: false
         )))
     }
     
     var body: some View {
         Form {
-            Section(header: Text("Personal Information")) {
-                TextField("Name", text: $viewModel.name)
-                    .textContentType(.name)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Personal Information")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    
+                    TextField("Name", text: $viewModel.name)
+                        .textContentType(.name)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                }
                 
-                TextField("Email", text: $viewModel.email)
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .autocapitalization(.none)
-            }
-            
-            if viewModel.showSuccessMessage {
-                Section {
+                if viewModel.showSuccessMessage {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
                             .foregroundColor(.green)
                         Text("Profile updated successfully")
                             .foregroundColor(.green)
                     }
+                    .padding()
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(8)
                 }
             }
+            .padding()
         }
         .navigationTitle("Edit Profile")
         .navigationBarTitleDisplayMode(.inline)
@@ -79,11 +86,10 @@ struct EditProfileView: View {
     }
     
     private func loadUserData() {
-        guard let profile = authService.currentProfile else { return }
+        guard let profile = familyAuth.currentProfile else { return }
         
         // Update the viewModel properties directly since we can't reassign @StateObject
         viewModel.name = profile.name
-        viewModel.email = profile.email
     }
     
     private func saveChanges() async {
@@ -92,7 +98,7 @@ struct EditProfileView: View {
             
             // Update the auth service with the new profile
             let updatedProfile = viewModel.updatedProfile
-            try await authService.updateProfile(updatedProfile)
+            try await familyAuth.updateProfile(updatedProfile, newName: viewModel.name)
             
             // Automatically dismiss after successful save
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
@@ -116,15 +122,27 @@ struct ChangePasswordView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Change Password")) {
-                    SecureField("Current Password", text: $currentPassword)
-                    SecureField("New Password", text: $newPassword)
-                    SecureField("Confirm New Password", text: $confirmPassword)
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Change Password")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        
+                        SecureField("Current Password", text: $currentPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        SecureField("New Password", text: $newPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        
+                        SecureField("Confirm New Password", text: $confirmPassword)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                    }
+                    
+                    Text("Password must be at least 8 characters long.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-                
-                Section(footer: Text("Password must be at least 8 characters long.")) {
-                    EmptyView()
-                }
+                .padding()
             }
             .navigationTitle("Change Password")
             .navigationBarTitleDisplayMode(.inline)

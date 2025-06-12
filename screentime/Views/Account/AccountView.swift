@@ -3,7 +3,7 @@ import PhotosUI
 
 struct AccountView: View {
     // MARK: - Environment
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @EnvironmentObject private var router: AppRouter
     
     // MARK: - State
@@ -100,21 +100,13 @@ struct AccountView: View {
                 
                 // User Info
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(authService.currentProfile?.name ?? "User")
+                    Text(familyAuth.currentProfile?.name ?? "User")
                         .font(.title3)
                         .fontWeight(.semibold)
                     
-                    Text(authService.currentProfile?.email ?? "")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    HStack {
-                        Image(systemName: authService.currentProfile?.userType == .parent ? "person.fill" : "person")
-                            .font(.caption)
-                        Text(authService.currentProfile?.userType == .parent ? "Parent Account" : "Child Account")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.accentColor)
+                    Text(familyAuth.currentProfile?.role == .parent ? "Parent Account" : "Child Account")
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
                 }
                 
                 Spacer()
@@ -295,11 +287,11 @@ struct AccountView: View {
         isLoading = true
         Task {
             do {
-                try await authService.signOut()
+                try await familyAuth.signOut()
             } catch let authError as AuthError {
                 error = authError
             } catch {
-                self.error = .unknownError
+                self.error = .unknown
             }
             isLoading = false
         }
@@ -312,11 +304,11 @@ struct AccountView: View {
             // and should be handled by a database function.
             // For now, we will just sign the user out.
             do {
-                try await authService.signOut()
+                try await familyAuth.signOut()
             } catch let authError as AuthError {
                 error = authError
             } catch {
-                self.error = .unknownError
+                self.error = .unknown
             }
             isLoading = false
         }
@@ -384,6 +376,6 @@ struct SettingsRow: View {
 struct AccountView_Previews: PreviewProvider {
     static var previews: some View {
         AccountView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 
