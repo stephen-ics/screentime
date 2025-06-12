@@ -105,7 +105,7 @@ struct DashboardContentView: View {
                 viewModel.goToChildDetail(child)
             },
             onSeeAllTapped: {
-                viewModel.selectTab(.children)
+                viewModel.selectTab(.screenTime)
             }
         )
         .equatable()
@@ -121,13 +121,9 @@ struct DashboardContentView: View {
     
     private func loadData() {
         Task {
-            do {
-                try await viewModel.loadCurrentUser()
-                try await viewModel.loadChildren()
-                try await viewModel.loadPendingRequests()
-            } catch {
-                print("Failed to load data: \(error)")
-            }
+            await viewModel.loadCurrentUser()
+            await viewModel.loadChildren()
+            await viewModel.loadPendingRequests()
         }
     }
     

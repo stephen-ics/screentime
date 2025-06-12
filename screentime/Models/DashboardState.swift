@@ -81,14 +81,14 @@ struct DashboardState {
 /// Represents the different tabs in the dashboard
 enum DashboardTab: Int, CaseIterable {
     case dashboard = 0
-    case children = 1
+    case screenTime = 1
     case tasks = 2
     case account = 3
     
     var title: String {
         switch self {
         case .dashboard: return "Dashboard"
-        case .children: return "Children"
+        case .screenTime: return "Screen Time"
         case .tasks: return "Tasks"
         case .account: return "Account"
         }
@@ -97,7 +97,7 @@ enum DashboardTab: Int, CaseIterable {
     var icon: String {
         switch self {
         case .dashboard: return "square.grid.2x2"
-        case .children: return "person.2"
+        case .screenTime: return "hourglass"
         case .tasks: return "checklist"
         case .account: return "person.circle"
         }

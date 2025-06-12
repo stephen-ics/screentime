@@ -58,7 +58,7 @@ struct RootView: View {
                 }
             }
         }
-        .onChange(of: familyAuthService.error) { error in
+        .onChange(of: familyAuthService.error) { _, error in
             if let error = error {
                 errorMessage = error.localizedDescription
                 showError = true
@@ -90,8 +90,7 @@ struct RootView: View {
                 TimeRequestsView()
                     .environmentObject(familyAuthService)
             case .settings:
-                ParentSettingsView(profile: familyAuthService.currentProfile ?? FamilyProfile.mockParent)
-                    .environmentObject(familyAuthService)
+                PlaceholderSheetView(title: "Settings", description: "Manage family and app settings")
             case .addTask:
                 PlaceholderSheetView(title: "Add Task", description: "Create a new task for children")
             case .account:
@@ -151,51 +150,70 @@ struct PlaceholderSheetView: View {
 struct MainAppView: View {
     let profile: FamilyProfile
     @EnvironmentObject private var router: AppRouter
+    @State private var selectedTab = 0
     
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             // Dashboard Tab
             DashboardView(profile: profile)
                 .tabItem {
-                    Image(systemName: "house.fill")
+                    Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
                     Text("Dashboard")
                 }
                 .tag(0)
             
-            // Screen Time Tab
+            // Screen Time Tab (replaces Children functionality)
             ScreenTimeView(profile: profile)
                 .tabItem {
-                    Image(systemName: "hourglass")
+                    Image(systemName: selectedTab == 1 ? "hourglass.fill" : "hourglass")
                     Text("Screen Time")
                 }
                 .tag(1)
             
-            // Apps Tab
-            AppsView(profile: profile)
+            // Tasks Tab (new addition)
+            TasksView(profile: profile)
                 .tabItem {
-                    Image(systemName: "app.fill")
-                    Text("Apps")
+                    Image(systemName: selectedTab == 2 ? "checklist" : "checklist")
+                    Text("Tasks")
                 }
                 .tag(2)
             
-            // Settings Tab (conditional based on role)
-            if profile.canManageFamily {
-                ParentSettingsView(profile: profile)
-                    .tabItem {
-                        Image(systemName: "gearshape.fill")
-                        Text("Settings")
-                    }
-                    .tag(3)
-            } else {
-                ChildSettingsView(profile: profile)
-                    .tabItem {
-                        Image(systemName: "person.crop.circle")
-                        Text("Profile")
-                    }
-                    .tag(3)
-            }
+            // Account Tab (replaces Settings) - Uses existing AccountView.swift
+            AccountView()
+                .tabItem {
+                    Image(systemName: selectedTab == 3 ? "person.circle.fill" : "person.circle")
+                    Text("Account")
+                }
+                .tag(3)
         }
         .accentColor(profile.isParent ? .blue : .green)
+        .onAppear {
+            configureTabBarAppearance()
+        }
+    }
+    
+    // MARK: - Enhanced Tab Bar Styling
+    
+    private func configureTabBarAppearance() {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor.systemBackground
+        
+        // Enhanced styling for better visual hierarchy
+        appearance.stackedLayoutAppearance.selected.titleTextAttributes = [
+            .foregroundColor: UIColor(profile.isParent ? .blue : .green),
+            .font: UIFont.systemFont(ofSize: 11, weight: .semibold)
+        ]
+        appearance.stackedLayoutAppearance.selected.iconColor = UIColor(profile.isParent ? .blue : .green)
+        
+        appearance.stackedLayoutAppearance.normal.titleTextAttributes = [
+            .foregroundColor: UIColor.secondaryLabel,
+            .font: UIFont.systemFont(ofSize: 11, weight: .medium)
+        ]
+        appearance.stackedLayoutAppearance.normal.iconColor = UIColor.secondaryLabel
+        
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 }
 
@@ -223,115 +241,130 @@ struct ScreenTimeView: View {
     
     var body: some View {
         NavigationView {
-            VStack {
-                Text("Screen Time Management")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("Role: \(profile.displayRole)")
-                    .foregroundColor(.secondary)
+            VStack(spacing: 24) {
+                // Header Section
+                VStack(spacing: 12) {
+                    Text("Screen Time Management")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("Role: \(profile.displayRole)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top)
                 
                 Spacer()
                 
-                if profile.isParent {
-                    Text("Manage family screen time limits and monitor usage")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                } else {
-                    Text("View your screen time and request additional time")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
+                // Main Content
+                VStack(spacing: 20) {
+                    if profile.isParent {
+                        VStack(spacing: 16) {
+                            Image(systemName: "hourglass.circle")
+                                .font(.system(size: 60, weight: .thin))
+                                .foregroundColor(.blue)
+                            
+                            Text("Manage Family Screen Time")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("Monitor usage, set limits, and manage time requests from your children")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "clock.badge.checkmark")
+                                .font(.system(size: 60, weight: .thin))
+                                .foregroundColor(.green)
+                            
+                            Text("Your Screen Time")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("View your usage statistics and request additional time when needed")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    }
                 }
                 
                 Spacer()
             }
             .padding()
             .navigationTitle("Screen Time")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
 
-// MARK: - Apps View
-struct AppsView: View {
+// MARK: - Tasks View
+struct TasksView: View {
     let profile: FamilyProfile
     
     var body: some View {
         NavigationView {
-            VStack {
-                Text("Apps Management")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("Role: \(profile.displayRole)")
-                    .foregroundColor(.secondary)
+            VStack(spacing: 24) {
+                // Header Section
+                VStack(spacing: 12) {
+                    Text("Tasks & Activities")
+                        .font(.title)
+                        .fontWeight(.bold)
+                    
+                    Text("Role: \(profile.displayRole)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top)
                 
                 Spacer()
                 
-                if profile.isParent {
-                    Text("Approve and manage apps for your children")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
-                } else {
-                    Text("View your approved apps and request new ones")
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding()
+                // Main Content
+                VStack(spacing: 20) {
+                    if profile.isParent {
+                        VStack(spacing: 16) {
+                            Image(systemName: "checklist.checked")
+                                .font(.system(size: 60, weight: .thin))
+                                .foregroundColor(.blue)
+                            
+                            Text("Manage Family Tasks")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("Create and assign tasks to your children, track completion, and reward good behavior")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    } else {
+                        VStack(spacing: 16) {
+                            Image(systemName: "star.circle")
+                                .font(.system(size: 60, weight: .thin))
+                                .foregroundColor(.green)
+                            
+                            Text("Your Tasks")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                                .multilineTextAlignment(.center)
+                            
+                            Text("Complete tasks assigned by your parents to earn extra screen time and rewards")
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal)
+                        }
+                    }
                 }
                 
                 Spacer()
             }
             .padding()
-            .navigationTitle("Apps")
-        }
-    }
-}
-
-// MARK: - Settings Views
-struct ParentSettingsView: View {
-    let profile: FamilyProfile
-    
-    var body: some View {
-        NavigationView {
-            VStack {
-                Text("Parent Settings")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("Manage family and app settings")
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                SecureChildInterface.SecureLogoutButton()
-            }
-            .padding()
-            .navigationTitle("Settings")
-        }
-    }
-}
-
-struct ChildSettingsView: View {
-    let profile: FamilyProfile
-    
-    var body: some View {
-        NavigationView {
-            VStack {
-                Text("Profile Settings")
-                    .font(.title)
-                    .fontWeight(.bold)
-                
-                Text("Limited settings for child profile")
-                    .foregroundColor(.secondary)
-                
-                Spacer()
-                
-                SecureChildInterface.SecureLogoutButton()
-            }
-            .padding()
-            .navigationTitle("Profile")
+            .navigationTitle("Tasks")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
@@ -340,34 +373,52 @@ struct ChildSettingsView: View {
 
 /// Loading screen shown during app initialization
 struct SplashScreenView: View {
+    @State private var animateGradient = false
+    @State private var scale: CGFloat = 0.8
+    
     var body: some View {
         ZStack {
+            // Animated background gradient
             LinearGradient(
-                colors: [Color.blue, Color.purple],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+                colors: [
+                    Color.blue.opacity(0.8),
+                    Color.indigo.opacity(0.8)
+                ],
+                startPoint: animateGradient ? .topLeading : .bottomTrailing,
+                endPoint: animateGradient ? .bottomTrailing : .topLeading
             )
             .ignoresSafeArea()
+            .animation(.easeInOut(duration: 2).repeatForever(autoreverses: true), value: animateGradient)
             
-            VStack(spacing: 24) {
-                Image(systemName: "clock.arrow.circlepath")
+            VStack(spacing: 32) {
+                // App icon/logo with better hourglass design
+                Image(systemName: "hourglass.circle.fill")
                     .font(.system(size: 80, weight: .thin))
                     .foregroundColor(.white)
+                    .scaleEffect(scale)
+                    .animation(.easeInOut(duration: 1).repeatForever(autoreverses: true), value: scale)
                 
+                // App name
                 Text("ScreenTime")
                     .font(.largeTitle)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                 
+                // Subtitle
                 Text("Family Time Management")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
                 
+                // Loading indicator
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     .scaleEffect(1.2)
                     .padding(.top, 20)
             }
+        }
+        .onAppear {
+            animateGradient = true
+            scale = 1.2
         }
     }
 }
