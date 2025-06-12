@@ -18,7 +18,7 @@ struct AuthenticationView: View {
     @State private var emailForVerification = ""
     
     // MARK: - Environment
-    @EnvironmentObject private var authService: SafeSupabaseAuthService
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     @Environment(\.colorScheme) private var colorScheme
     
     // MARK: - Body
@@ -85,7 +85,7 @@ struct AuthenticationView: View {
         }
         .sheet(isPresented: $showEmailVerification) {
             EmailVerificationView(email: emailForVerification)
-                .environmentObject(authService)
+                .environmentObject(familyAuth)
         }
         .onAppear {
             withAnimation(.linear(duration: 3).repeatForever(autoreverses: true)) {
@@ -229,7 +229,7 @@ struct AuthenticationView: View {
                     removal: .move(edge: .top).combined(with: .opacity)
                 ))
             }
-            
+
             // Email field
             CustomTextField(
                 placeholder: "Email",
@@ -414,7 +414,7 @@ struct AuthenticationView: View {
                     email: "test@example.com",
                     password: "testpassword123",
                     name: "Test User",
-                    isParent: true
+                    role: .parent
                 )
                 print("✅ Test sign up completed!")
             } catch {
@@ -428,10 +428,10 @@ struct AuthenticationView: View {
     private func handleAuthentication() {
         // Validate input
         guard !email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            showErrorMessage("Please enter your email", recovery: "A valid email address is required to create or access your account")
+            showErrorMessage("Please enter an email", recovery: "An email is required to create or access your account")
             return
         }
-        
+
         guard !password.isEmpty else {
             showErrorMessage("Please enter your password", recovery: "Password is required for authentication")
             return
@@ -447,29 +447,19 @@ struct AuthenticationView: View {
         _Concurrency.Task {
             do {
                 if isSignUp {
-                    let result = try await authService.signUp(
+                    try await familyAuth.signUpFamily(
                         email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                         password: password,
-                        name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                        isParent: isParent
+                        parentName: name.trimmingCharacters(in: .whitespacesAndNewlines)
                     )
                     
                     await MainActor.run {
                         isLoading = false
-                        
-                        switch result {
-                        case .verified:
-                            // User is immediately verified - success handled by RootView
-                            break
-                        case .pendingVerification(let verificationEmail):
-                            // Show email verification view
-                            emailForVerification = verificationEmail
-                            showEmailVerification = true
-                        }
+                        // Success - the RootView will handle navigation
                     }
                 } else {
-                    try await authService.signIn(
-                        email: email.trimmingCharacters(in: .whitespacesAndNewlines), 
+                    try await familyAuth.signInFamily(
+                        email: email,
                         password: password
                     )
                     
@@ -614,6 +604,6 @@ struct SocialSignInButton: View {
 struct AuthenticationView_Previews: PreviewProvider {
     static var previews: some View {
         AuthenticationView()
-            .environmentObject(SafeSupabaseAuthService.shared)
+            .environmentObject(FamilyAuthService.shared)
     }
 } 
