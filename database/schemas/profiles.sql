@@ -6,14 +6,13 @@
 
 CREATE TABLE IF NOT EXISTS profiles (
     id UUID REFERENCES auth.users ON DELETE CASCADE PRIMARY KEY,
-    email TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
-    username TEXT NOT NULL,
     user_type TEXT NOT NULL CHECK (user_type IN ('parent', 'child')),
     is_parent BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
-    parent_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     
     -- Constraints
     CONSTRAINT profiles_email_check CHECK (length(email) > 0),
