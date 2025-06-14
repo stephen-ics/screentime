@@ -165,8 +165,8 @@ final class ParentDashboardViewModel: ObservableObject {
             addChild()
         case .viewReports:
             viewReports()
-        case .settings:
-            openSettings()
+        case .createTask:
+            createTask()
         }
     }
     
@@ -184,31 +184,18 @@ final class ParentDashboardViewModel: ObservableObject {
         print("🔘 DEBUG: router.presentSheet(.timeRequests) completed")
     }
     
-    /// Navigates to reports view
+    /// Navigates to analytics view (replaces reports)
     func viewReports() {
-        print("🔘 DEBUG: viewReports() called - navigating")
-        router?.navigate(to: .reports)
-        print("🔘 DEBUG: router.navigate(to: .reports) completed")
+        print("🔘 DEBUG: viewReports() called - selecting analytics tab")
+        selectTab(.analytics)
+        print("🔘 DEBUG: analytics tab selected")
     }
     
-    /// Opens settings
-    func openSettings() {
-        print("🔘 DEBUG: openSettings() called - presenting sheet")
-        router?.presentSheet(.settings)
-        print("🔘 DEBUG: router.presentSheet(.settings) completed")
-    }
-    
-    /// Navigates to child detail view
-    /// - Parameter child: The child to view details for
-    func goToChildDetail(_ child: FamilyProfile) {
-        // Convert FamilyProfile to Profile for navigation
-        let profile = Profile(
-            id: child.id,
-            email: "", // FamilyProfile does not have email
-            name: child.name,
-            userType: child.role == .parent ? .parent : .child
-        )
-        router?.navigate(to: .childDetail(profile))
+    /// Creates a new task
+    func createTask() {
+        print("🔘 DEBUG: createTask() called - presenting add task sheet")
+        router?.presentSheet(.addTask)
+        print("🔘 DEBUG: router.presentSheet(.addTask) completed")
     }
     
     /// Clears the current error
@@ -446,7 +433,7 @@ enum QuickAction: String, CaseIterable, Identifiable {
     case timeRequests = "Time Requests"
     case addChild = "Add Child"
     case viewReports = "View Reports"
-    case settings = "Settings"
+    case createTask = "Create Task"
     
     var id: String { rawValue }
     
@@ -455,7 +442,7 @@ enum QuickAction: String, CaseIterable, Identifiable {
         case .timeRequests: return "hourglass.badge.plus"
         case .addChild: return "person.badge.plus"
         case .viewReports: return "chart.bar.fill"
-        case .settings: return "gearshape.fill"
+        case .createTask: return "plus.square.fill"
         }
     }
     
@@ -464,7 +451,7 @@ enum QuickAction: String, CaseIterable, Identifiable {
         case .timeRequests: return "warning"
         case .addChild: return "primaryBlue"
         case .viewReports: return "success"
-        case .settings: return "secondaryText"
+        case .createTask: return "success"
         }
     }
 } 
