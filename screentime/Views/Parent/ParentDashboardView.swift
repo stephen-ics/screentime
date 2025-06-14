@@ -12,9 +12,6 @@ struct ParentDashboardView: View {
     // MARK: - State Objects
     @StateObject private var viewModel = ParentDashboardViewModel()
     
-    // MARK: - State
-    @State private var showingAddChild = false
-    
     // MARK: - Body
     
     var body: some View {
@@ -41,10 +38,6 @@ struct ParentDashboardView: View {
                     // Handle settings
                 }
             }
-        }
-        .sheet(isPresented: $showingAddChild) {
-            AddChildProfileSheet()
-                .environmentObject(familyAuth)
         }
         .onAppear {
             viewModel.updateRouter(router)
