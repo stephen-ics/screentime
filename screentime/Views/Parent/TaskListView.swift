@@ -71,7 +71,7 @@ struct TaskListView: View {
             guard let currentProfile = familyAuth.currentProfile else {
                 throw NSError(domain: "TaskListView", code: 1, userInfo: [NSLocalizedDescriptionKey: "No current profile"])
             }
-            tasks = try await dataRepository.getTasks(for: currentProfile.id)
+            tasks = try await dataRepository.getTasksCreatedBy(userId: currentProfile.authUserId)
         } catch {
             errorMessage = error.localizedDescription
         }
