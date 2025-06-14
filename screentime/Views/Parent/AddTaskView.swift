@@ -197,7 +197,7 @@ struct AddTaskView: View {
                     isRecurring: isRecurring,
                     recurringFrequency: isRecurring ? recurringFrequency : nil,
                     assignedTo: child.id,
-                    createdBy: familyAuth.currentProfile?.id
+                    createdBy: familyAuth.currentProfile?.authUserId
                 )
                 
                 _ = try await dataRepository.createTask(task)
