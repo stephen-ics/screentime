@@ -19,7 +19,7 @@ struct ParentDashboardView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
                 // Welcome Header
                 welcomeHeader
                 
@@ -29,7 +29,7 @@ struct ParentDashboardView: View {
                 // Recent Activity Placeholder
                 recentActivitySection
                 
-                Spacer(minLength: 20)
+                Spacer(minLength: 24)
             }
             .padding()
         }
