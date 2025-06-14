@@ -531,29 +531,6 @@ struct TaskDetailSheet: View {
     
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            if task.isCompleted && !task.isApproved {
-                Button(action: approveTask) {
-                    HStack {
-                        if isUpdating {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        } else {
-                            Image(systemName: "checkmark.circle")
-                        }
-                        Text("Approve Task")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.green)
-                    )
-                    .foregroundColor(.white)
-                    .font(.headline)
-                }
-                .disabled(isUpdating)
-            }
-            
             if !task.isCompleted {
                 Button(action: markAsCompleted) {
                     HStack {
@@ -561,7 +538,7 @@ struct TaskDetailSheet: View {
                             ProgressView()
                                 .scaleEffect(0.8)
                         } else {
-                            Image(systemName: "checkmark")
+                            Image(systemName: "checkmark.circle")
                         }
                         Text("Mark as Completed")
                     }
@@ -569,7 +546,7 @@ struct TaskDetailSheet: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.blue)
+                            .fill(Color.green)
                     )
                     .foregroundColor(.white)
                     .font(.headline)
@@ -600,34 +577,24 @@ struct TaskDetailSheet: View {
         }
     }
     
-    private func approveTask() {
-        Task {
-            isUpdating = true
-            do {
-                _ = try await dataRepository.approveTask(id: task.id)
-                await onTaskUpdated()
-                await MainActor.run {
-                    dismiss()
-                }
-            } catch {
-                errorMessage = error.localizedDescription
-            }
-            isUpdating = false
-        }
-    }
-    
     private func markAsCompleted() {
         Task {
             isUpdating = true
             do {
+                print("🔍 DEBUG: Marking task as completed: \(task.id)")
                 var updatedTask = task
+                print("🔍 DEBUG: Updated task: \(updatedTask)")
                 updatedTask.complete()
+                updatedTask.approve()
+                print("🔍 DEBUG: Updated task after completion: \(updatedTask)")
                 _ = try await dataRepository.updateTask(updatedTask)
+                print("🔍 DEBUG: Task updated successfully")
                 await onTaskUpdated()
                 await MainActor.run {
                     dismiss()
                 }
             } catch {
+                print("🔍 DEBUG: Error marking task as completed: \(error)")
                 errorMessage = error.localizedDescription
             }
             isUpdating = false
