@@ -122,25 +122,42 @@ struct ParentDashboardView: View {
 
     // MARK: - Recent Activity
     private var recentActivitySection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Recent Activity")
-                .font(.headline)
-                .fontWeight(.semibold)
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Text("Recent Activity")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                
+                Spacer()
+                
+                Button("View All") {
+                    // TODO: Navigate to full activity view
+                }
+                .font(.caption)
+                .foregroundColor(.blue)
+            }
             
-            VStack(spacing: 12) {
-                Text("No recent activity")
-                    .font(.subheadline)
+            VStack(spacing: 16) {
+                Image(systemName: "clock.badge.checkmark")
+                    .font(.system(size: 32))
                     .foregroundColor(.secondary)
                 
+                Text("No recent activity")
+                    .font(.title3)
+                    .fontWeight(.medium)
+                    .foregroundColor(.primary)
+                
                 Text("Activity will appear here once your children start using the app")
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
+                    .lineLimit(2)
             }
             .frame(maxWidth: .infinity)
-            .padding(24)
+            .padding(.vertical, 32)
+            .padding(.horizontal, 24)
             .background(.regularMaterial)
-            .cornerRadius(12)
+            .cornerRadius(16)
         }
     }
 }
