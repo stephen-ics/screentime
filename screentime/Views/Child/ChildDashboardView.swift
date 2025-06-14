@@ -157,7 +157,6 @@ struct ChildDashboardView: View {
     @StateObject private var viewModel = ChildDashboardViewModel()
     @EnvironmentObject private var familyAuth: FamilyAuthService
     @Binding var selectedTab: Int
-    @State private var selectedPage = 0
     
     init(selectedTab: Binding<Int> = .constant(0)) {
         self._selectedTab = selectedTab
@@ -165,23 +164,21 @@ struct ChildDashboardView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                // Content area
-                Group {
-                    switch selectedPage {
-                    case 0:
-                        homePageContent
-                    case 1:
-                        tasksPageContent
-                    case 2:
-                        statsPageContent
-                    default:
-                        homePageContent
-                    }
+            ScrollView {
+                LazyVStack(spacing: DesignSystem.Spacing.large) {
+                    // Fun Header with greeting and streak
+                    funHeaderSection
+                    
+                    // Big Fun Time Display
+                    timeDisplayHero
+                    
+                    // Primary Action Buttons
+                    primaryActionButtons
                 }
-                
-                // Bottom navigation bar
-                bottomNavigationBar
+                .padding(DesignSystem.Spacing.medium)
+                .refreshable {
+                    await viewModel.refreshData()
+                }
             }
             .background(
                 LinearGradient(
@@ -242,169 +239,6 @@ struct ChildDashboardView: View {
                         .foregroundColor(.orange)
                 }
             }
-        }
-    }
-    
-    // MARK: - Home Page Content
-    private var homePageContent: some View {
-        ScrollView {
-            LazyVStack(spacing: DesignSystem.Spacing.large) {
-                // Fun Header with greeting and streak
-                funHeaderSection
-                
-                // Big Fun Time Display
-                timeDisplayHero
-                
-                // Primary Action Buttons
-                primaryActionButtons
-            }
-            .padding(DesignSystem.Spacing.medium)
-            .refreshable {
-                await viewModel.refreshData()
-            }
-        }
-    }
-    
-    // MARK: - Tasks Page Content
-    private var tasksPageContent: some View {
-        ScrollView {
-            LazyVStack(spacing: DesignSystem.Spacing.large) {
-                // Tasks header
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                    HStack {
-                        Text("⭐ My Tasks")
-                            .font(DesignSystem.Typography.title1)
-                            .fontWeight(.bold)
-                            .foregroundColor(DesignSystem.Colors.primaryText)
-                        
-                        Spacer()
-                        
-                        Text("\(viewModel.completedTasksToday) done today! 🎉")
-                            .font(DesignSystem.Typography.caption1)
-                            .foregroundColor(DesignSystem.Colors.success)
-                            .padding(.horizontal, DesignSystem.Spacing.small)
-                            .padding(.vertical, DesignSystem.Spacing.xxSmall)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.small)
-                                    .fill(DesignSystem.Colors.success.opacity(0.1))
-                            )
-                    }
-                }
-                .padding(.horizontal, DesignSystem.Spacing.medium)
-                
-                // Tasks list
-                if viewModel.tasks.isEmpty {
-                    emptyTasksView
-                        .padding(.horizontal, DesignSystem.Spacing.medium)
-                } else {
-                    VStack(spacing: DesignSystem.Spacing.medium) {
-                        ForEach(viewModel.tasks, id: \.id) { task in
-                            FunTaskCard(task: task)
-                        }
-                    }
-                    .padding(.horizontal, DesignSystem.Spacing.medium)
-                }
-            }
-            .padding(.vertical, DesignSystem.Spacing.medium)
-        }
-    }
-    
-    // MARK: - Stats Page Content
-    private var statsPageContent: some View {
-        ScrollView {
-            LazyVStack(spacing: DesignSystem.Spacing.large) {
-                // Stats header
-                Text("📊 My Stats")
-                    .font(DesignSystem.Typography.title1)
-                    .fontWeight(.bold)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, DesignSystem.Spacing.medium)
-                
-                // Fun stats cards
-                VStack(spacing: DesignSystem.Spacing.medium) {
-                    HStack(spacing: DesignSystem.Spacing.medium) {
-                        FunStatCard(
-                            emoji: "🔥",
-                            title: "Streak",
-                            value: "\(viewModel.currentStreak) days",
-                            color: DesignSystem.Colors.warning
-                        )
-                        
-                        FunStatCard(
-                            emoji: "⭐",
-                            title: "Tasks Done",
-                            value: "\(viewModel.completedTasksToday) today",
-                            color: DesignSystem.Colors.success
-                        )
-                    }
-                    
-                    HStack(spacing: DesignSystem.Spacing.medium) {
-                        FunStatCard(
-                            emoji: "⏰",
-                            title: "Time Earned",
-                            value: formatTime(viewModel.screenTimeBalance?.availableSeconds ?? 0),
-                            color: DesignSystem.Colors.childAccent
-                        )
-                        
-                        FunStatCard(
-                            emoji: "🎯",
-                            title: "Daily Goal",
-                            value: formatTime(viewModel.screenTimeBalance?.dailyLimitSeconds ?? 0),
-                            color: DesignSystem.Colors.info
-                        )
-                    }
-                }
-                .padding(.horizontal, DesignSystem.Spacing.medium)
-                
-                // Progress visualization
-                funProgressSection
-                    .padding(.horizontal, DesignSystem.Spacing.medium)
-            }
-            .padding(.vertical, DesignSystem.Spacing.medium)
-        }
-    }
-    
-    // MARK: - Bottom Navigation Bar
-    private var bottomNavigationBar: some View {
-        VStack(spacing: 0) {
-            Divider()
-            
-            HStack {
-                // Home tab
-                BottomNavButton(
-                    emoji: "🏠",
-                    title: "Home",
-                    isSelected: selectedPage == 0
-                ) {
-                    selectedPage = 0
-                }
-                
-                Spacer()
-                
-                // Tasks tab
-                BottomNavButton(
-                    emoji: "⭐",
-                    title: "Tasks",
-                    isSelected: selectedPage == 1
-                ) {
-                    selectedPage = 1
-                }
-                
-                Spacer()
-                
-                // Stats tab
-                BottomNavButton(
-                    emoji: "📊",
-                    title: "Stats",
-                    isSelected: selectedPage == 2
-                ) {
-                    selectedPage = 2
-                }
-            }
-            .padding(.horizontal, DesignSystem.Spacing.large)
-            .padding(.vertical, DesignSystem.Spacing.medium)
-            .background(DesignSystem.Colors.background)
         }
     }
     
@@ -588,61 +422,32 @@ struct ChildDashboardView: View {
             }
             .buttonStyle(FunScaleButtonStyle())
             
-            HStack(spacing: DesignSystem.Spacing.medium) {
-                // View Tasks Button (FIXED NAVIGATION)
-                Button(action: {
-                    selectedPage = 1 // Navigate to Tasks page within dashboard
-                }) {
-                    HStack(spacing: DesignSystem.Spacing.small) {
-                        Text("⭐")
-                            .font(.system(size: 16))
-                        
-                        Text("My Tasks")
-                            .font(DesignSystem.Typography.subheadline)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(DesignSystem.Colors.childAccent)
-                    .padding(.horizontal, DesignSystem.Spacing.medium)
-                    .padding(.vertical, DesignSystem.Spacing.small)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                            .fill(DesignSystem.Colors.childAccent.opacity(0.1))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                            .stroke(DesignSystem.Colors.childAccent.opacity(0.3), lineWidth: 1)
-                    )
+            // Request More Time Button  
+            Button(action: {
+                viewModel.showingTimeRequest = true
+            }) {
+                HStack(spacing: DesignSystem.Spacing.small) {
+                    Text("🙏")
+                        .font(.system(size: 16))
+                    
+                    Text("Ask for More Time")
+                        .font(DesignSystem.Typography.subheadline)
+                        .fontWeight(.semibold)
                 }
-                .buttonStyle(FunScaleButtonStyle())
-                
-                // Request More Time Button  
-                Button(action: {
-                    viewModel.showingTimeRequest = true
-                }) {
-                    HStack(spacing: DesignSystem.Spacing.small) {
-                        Text("🙏")
-                            .font(.system(size: 16))
-                        
-                        Text("Ask for More")
-                            .font(DesignSystem.Typography.subheadline)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(DesignSystem.Colors.warning)
-                    .padding(.horizontal, DesignSystem.Spacing.medium)
-                    .padding(.vertical, DesignSystem.Spacing.small)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                            .fill(DesignSystem.Colors.warning.opacity(0.1))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
-                            .stroke(DesignSystem.Colors.warning.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(FunScaleButtonStyle())
+                .foregroundColor(DesignSystem.Colors.warning)
+                .padding(.horizontal, DesignSystem.Spacing.medium)
+                .padding(.vertical, DesignSystem.Spacing.small)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .fill(DesignSystem.Colors.warning.opacity(0.1))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                        .stroke(DesignSystem.Colors.warning.opacity(0.3), lineWidth: 1)
+                )
             }
+            .buttonStyle(FunScaleButtonStyle())
         }
     }
     
@@ -677,127 +482,6 @@ struct ChildDashboardView: View {
             }
         }
         .frame(height: 12)
-    }
-    
-    private var emptyTasksView: some View {
-        VStack(spacing: DesignSystem.Spacing.medium) {
-            Text("🌟")
-                .font(.system(size: 40))
-            
-            Text("All caught up!")
-                .font(DesignSystem.Typography.bodyBold)
-                .fontWeight(.bold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            Text("Awesome job! New tasks might appear later.")
-                .font(DesignSystem.Typography.subheadline)
-                .foregroundColor(DesignSystem.Colors.secondaryText)
-                .multilineTextAlignment(.center)
-        }
-        .padding(DesignSystem.Spacing.large)
-        .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [
-                    DesignSystem.Colors.success.opacity(0.1),
-                    DesignSystem.Colors.success.opacity(0.05)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .cornerRadius(DesignSystem.CornerRadius.large)
-    }
-    
-    private var funProgressSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("📈 Progress Today")
-                .font(DesignSystem.Typography.title2)
-                .fontWeight(.bold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            VStack(spacing: DesignSystem.Spacing.large) {
-                timeProgressView
-                taskProgressView
-            }
-        }
-        .funCardStyle()
-    }
-    
-    private var timeProgressView: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-            HStack {
-                Text("Screen Time Usage")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                
-                Spacer()
-                
-                Text(timeUsageText)
-                    .font(DesignSystem.Typography.body)
-                    .fontWeight(.bold)
-                    .foregroundColor(DesignSystem.Colors.childAccent)
-            }
-            
-            funProgressBar
-        }
-    }
-    
-    private var taskProgressView: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-            HStack {
-                Text("Tasks Completed")
-                    .font(DesignSystem.Typography.body)
-                    .foregroundColor(DesignSystem.Colors.primaryText)
-                
-                Spacer()
-                
-                Text("\(viewModel.completedTasksToday) / \(viewModel.tasks.count)")
-                    .font(DesignSystem.Typography.body)
-                    .fontWeight(.bold)
-                    .foregroundColor(DesignSystem.Colors.success)
-            }
-            
-            taskProgressBar
-        }
-    }
-    
-    private var taskProgressBar: some View {
-        let taskProgress = viewModel.tasks.count > 0 ? Double(viewModel.completedTasksToday) / Double(viewModel.tasks.count) : 0
-        
-        return GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(DesignSystem.Colors.separator.opacity(0.3))
-                    .frame(height: 12)
-                
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                DesignSystem.Colors.success,
-                                DesignSystem.Colors.success.opacity(0.7)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: max(0, geometry.size.width * taskProgress), height: 12)
-                    .animation(.spring(response: 0.8, dampingFraction: 0.8), value: taskProgress)
-            }
-        }
-        .frame(height: 12)
-    }
-    
-    private var timeUsageText: String {
-        let dailyLimitSeconds = viewModel.screenTimeBalance?.dailyLimitSeconds ?? 0
-        let availableSeconds = viewModel.screenTimeBalance?.availableSeconds ?? 0
-        let usedSeconds = dailyLimitSeconds - availableSeconds
-        
-        let usedMinutes = Int(usedSeconds / 60)
-        let totalMinutes = Int(dailyLimitSeconds / 60)
-        
-        return "\(usedMinutes)m / \(totalMinutes)m"
     }
     
     private func formatTime(_ seconds: Double) -> String {

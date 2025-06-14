@@ -415,236 +415,103 @@ struct FunChildTaskCard: View {
     
     var body: some View {
         Button(action: onTap) {
-            VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-                HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
-                    // Fun task emoji
-                    Text(getTaskEmoji(task.title))
-                        .font(.system(size: 32))
+            HStack(alignment: .top, spacing: DesignSystem.Spacing.medium) {
+                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
+                    Text(task.title)
+                        .font(DesignSystem.Typography.body)
+                        .fontWeight(.semibold)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                        Text(task.title)
-                            .font(DesignSystem.Typography.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(DesignSystem.Colors.primaryText)
+                    if let description = task.taskDescription {
+                        Text(description)
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
                             .lineLimit(2)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        if let description = task.taskDescription {
-                            Text(description)
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                                .lineLimit(3)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
                     }
                     
-                    Spacer()
-                    
-                    // Big fun reward display
-                    VStack(spacing: DesignSystem.Spacing.xSmall) {
-                        Text("⚡")
-                            .font(.system(size: 16))
+                    // Compact status row
+                    HStack(spacing: DesignSystem.Spacing.small) {
+                        statusBadge
                         
-                        Text("+\(Int(task.rewardSeconds / 60))")
-                            .font(DesignSystem.Typography.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(DesignSystem.Colors.success)
+                        Spacer()
                         
-                        Text("min")
-                            .font(DesignSystem.Typography.caption2)
-                            .foregroundColor(DesignSystem.Colors.secondaryText)
-                    }
-                    .padding(DesignSystem.Spacing.medium)
-                    .background(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        DesignSystem.Colors.success.opacity(0.2),
-                                        DesignSystem.Colors.success.opacity(0.1)
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
-                            .stroke(DesignSystem.Colors.success.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                
-                // Status footer
-                HStack {
-                    statusBadge
-                    
-                    Spacer()
-                    
-                    if !task.isCompleted && onComplete != nil {
-                        Button(action: {
-                            onComplete?()
-                        }) {
-                            HStack(spacing: DesignSystem.Spacing.small) {
-                                if isProcessing {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("🙏")
-                                        .font(.system(size: 14))
-                                }
-                                
-                                Text(isProcessing ? "Requesting..." : "Request Complete")
-                                    .font(DesignSystem.Typography.bodyBold)
-                                    .fontWeight(.bold)
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, DesignSystem.Spacing.large)
-                            .padding(.vertical, DesignSystem.Spacing.small)
-                            .background(
-                                LinearGradient(
-                                    colors: [
-                                        DesignSystem.Colors.childAccent,
-                                        DesignSystem.Colors.childAccent.opacity(0.8)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(DesignSystem.CornerRadius.medium)
-                            .shadow(
-                                color: DesignSystem.Colors.childAccent.opacity(0.3),
-                                radius: 4,
-                                x: 0,
-                                y: 2
-                            )
-                        }
-                        .buttonStyle(FunScaleButtonStyle())
-                        .disabled(isProcessing)
-                        .opacity(isProcessing ? 0.8 : 1.0)
-                    } else if task.isCompleted && !task.isApproved {
-                        // Waiting for parent approval state
-                        VStack(spacing: DesignSystem.Spacing.medium) {
-                            HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
-                                Text("⏳")
-                                    .font(.system(size: 20))
-                                
-                                Text("Waiting for Parent Approval")
-                                    .font(DesignSystem.Typography.bodyBold)
-                                    .fontWeight(.bold)
-                            }
-                            .foregroundColor(DesignSystem.Colors.warning)
-                            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
-                            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                                    .fill(DesignSystem.Colors.warning.opacity(0.1))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                                    .stroke(DesignSystem.Colors.warning.opacity(0.3), lineWidth: 2)
-                            )
+                        // Reward display
+                        HStack(spacing: DesignSystem.Spacing.xSmall) {
+                            Text("⚡")
+                                .font(.system(size: 12))
                             
-                            Text("Your request has been sent to your parent for review.")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                                .multilineTextAlignment(.center)
+                            Text("+\(Int(task.rewardSeconds / 60)) min")
+                                .font(DesignSystem.Typography.caption1)
+                                .fontWeight(.bold)
+                                .foregroundColor(DesignSystem.Colors.success)
                         }
+                        .padding(.horizontal, DesignSystem.Spacing.small)
+                        .padding(.vertical, DesignSystem.Spacing.xxSmall)
+                        .background(
+                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.pill)
+                                .fill(DesignSystem.Colors.success.opacity(0.15))
+                        )
                     }
                 }
             }
-            .padding(DesignSystem.Spacing.cardPadding)
+            .padding(DesignSystem.Spacing.medium)
             .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                task.isCompleted ? DesignSystem.Colors.success.opacity(0.05) : DesignSystem.Colors.childAccent.opacity(0.03),
-                                .white
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                    .fill(.white)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
+                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
                     .stroke(
-                        task.isCompleted ? DesignSystem.Colors.success.opacity(0.3) : DesignSystem.Colors.childAccent.opacity(0.2),
-                        lineWidth: 2
+                        task.isCompleted ? DesignSystem.Colors.success.opacity(0.3) : DesignSystem.Colors.separator.opacity(0.3),
+                        lineWidth: 1
                     )
             )
             .shadow(
-                color: task.isCompleted ? DesignSystem.Colors.success.opacity(0.2) : DesignSystem.Colors.childAccent.opacity(0.1),
-                radius: 8,
-                x: 0,
-                y: 4
+                color: DesignSystem.Shadow.small.color.opacity(0.1),
+                radius: DesignSystem.Shadow.small.radius,
+                x: DesignSystem.Shadow.small.x,
+                y: DesignSystem.Shadow.small.y
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
     
+    // MARK: - Status Badge
     private var statusBadge: some View {
-        HStack(spacing: DesignSystem.Spacing.small) {
-            Text(statusEmoji)
-                .font(.system(size: 14))
-            
-            Text(statusText)
-                .font(DesignSystem.Typography.caption1)
-                .fontWeight(.bold)
-                .foregroundColor(statusColor)
-        }
-        .padding(.horizontal, DesignSystem.Spacing.medium)
-        .padding(.vertical, DesignSystem.Spacing.xSmall)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.pill)
-                .fill(statusColor.opacity(0.15))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.pill)
-                .stroke(statusColor.opacity(0.3), lineWidth: 1)
-        )
-    }
-    
-    private var statusColor: Color {
-        if task.isCompleted {
-            return task.isApproved ? DesignSystem.Colors.success : DesignSystem.Colors.warning
-        }
-        return DesignSystem.Colors.childAccent
-    }
-    
-    private var statusEmoji: String {
-        if task.isCompleted {
-            return task.isApproved ? "🎉" : "⏳"
-        }
-        return "🎯"
-    }
-    
-    private var statusText: String {
-        if task.isCompleted {
-            return task.isApproved ? "Approved!" : "Requested"
-        }
-        return "Ready to Do!"
-    }
-    
-    private func getTaskEmoji(_ title: String) -> String {
-        let lowercased = title.lowercased()
-        if lowercased.contains("clean") || lowercased.contains("room") {
-            return "🧹"
-        } else if lowercased.contains("homework") || lowercased.contains("math") {
-            return "📚"
-        } else if lowercased.contains("dog") || lowercased.contains("pet") {
-            return "🐕"
-        } else if lowercased.contains("piano") || lowercased.contains("music") {
-            return "🎹"
-        } else if lowercased.contains("dish") || lowercased.contains("kitchen") {
-            return "🍽️"
-        } else if lowercased.contains("read") {
-            return "📖"
-        } else {
-            return "⭐"
+        Group {
+            if task.isCompleted {
+                if task.isApproved {
+                    HStack(spacing: DesignSystem.Spacing.xSmall) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                        Text("Approved")
+                            .font(DesignSystem.Typography.caption1)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(DesignSystem.Colors.success)
+                } else {
+                    HStack(spacing: DesignSystem.Spacing.xSmall) {
+                        Image(systemName: "clock.fill")
+                            .font(.system(size: 12))
+                        Text("Pending Approval")
+                            .font(DesignSystem.Typography.caption1)
+                            .fontWeight(.medium)
+                    }
+                    .foregroundColor(DesignSystem.Colors.warning)
+                }
+            } else {
+                HStack(spacing: DesignSystem.Spacing.xSmall) {
+                    Image(systemName: "circle")
+                        .font(.system(size: 12))
+                    Text("Tap to complete")
+                        .font(DesignSystem.Typography.caption1)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(DesignSystem.Colors.secondaryText)
+            }
         }
     }
 }
@@ -658,277 +525,140 @@ struct ChildTaskDetailView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.xxLarge) {
-                    // Fun task header
-                    VStack(spacing: DesignSystem.Spacing.large) {
-                        Text(getTaskEmoji(task.title))
-                            .font(.system(size: 80))
-                        
-                        Text(task.title)
-                            .font(DesignSystem.Typography.largeTitle)
+            VStack(spacing: DesignSystem.Spacing.large) {
+                // Task header
+                VStack(spacing: DesignSystem.Spacing.medium) {
+                    Text(task.title)
+                        .font(DesignSystem.Typography.title1)
+                        .fontWeight(.bold)
+                        .foregroundColor(DesignSystem.Colors.primaryText)
+                        .multilineTextAlignment(.center)
+                    
+                    if let description = task.taskDescription {
+                        Text(description)
+                            .font(DesignSystem.Typography.body)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, DesignSystem.Spacing.medium)
+                    }
+                }
+                .padding(.top, DesignSystem.Spacing.large)
+                
+                // Reward info
+                HStack(spacing: DesignSystem.Spacing.medium) {
+                    VStack(spacing: DesignSystem.Spacing.small) {
+                        Text("⚡")
+                            .font(.system(size: 24))
+                        Text("Reward")
+                            .font(DesignSystem.Typography.caption1)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                        Text("\(Int(task.rewardSeconds / 60)) min")
+                            .font(DesignSystem.Typography.title3)
                             .fontWeight(.bold)
-                            .foregroundColor(DesignSystem.Colors.primaryText)
+                            .foregroundColor(DesignSystem.Colors.success)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(DesignSystem.Spacing.medium)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                            .fill(DesignSystem.Colors.success.opacity(0.1))
+                    )
+                    
+                    VStack(spacing: DesignSystem.Spacing.small) {
+                        Text(statusEmoji)
+                            .font(.system(size: 24))
+                        Text("Status")
+                            .font(DesignSystem.Typography.caption1)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
+                        Text(statusTitle)
+                            .font(DesignSystem.Typography.caption1)
+                            .fontWeight(.bold)
+                            .foregroundColor(statusColor)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(DesignSystem.Spacing.medium)
+                    .background(
+                        RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
+                            .fill(statusColor.opacity(0.1))
+                    )
+                }
+                .padding(.horizontal, DesignSystem.Spacing.medium)
+                
+                Spacer()
+                
+                // Completion button (only for pending tasks)
+                if !task.isCompleted {
+                    VStack(spacing: DesignSystem.Spacing.medium) {
+                        Text("Ready to mark this task as complete?")
+                            .font(DesignSystem.Typography.subheadline)
+                            .foregroundColor(DesignSystem.Colors.secondaryText)
                             .multilineTextAlignment(.center)
                         
-                        if let description = task.taskDescription {
-                            Text(description)
-                                .font(DesignSystem.Typography.body)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                                .multilineTextAlignment(.center)
-                                .padding(DesignSystem.Spacing.large)
-                                .background(
-                                    RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.large)
-                                        .fill(DesignSystem.Colors.groupedBackground)
-                                )
-                        }
-                    }
-                    
-                    // Big reward section
-                    rewardSection
-                    
-                    // Status section
-                    statusSection
-                    
-                    Spacer(minLength: DesignSystem.Spacing.xxxLarge)
-                }
-                .padding(DesignSystem.Spacing.medium)
-            }
-            .background(
-                LinearGradient(
-                    colors: [
-                        DesignSystem.Colors.groupedBackground,
-                        DesignSystem.Colors.childAccent.opacity(0.02)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .navigationTitle("Task Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        onDismiss()
-                    }
-                    .foregroundColor(DesignSystem.Colors.childAccent)
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 0) {
-                    Divider()
-                    
-                    if !task.isCompleted {
                         Button(action: onComplete) {
-                            HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
+                            HStack(spacing: DesignSystem.Spacing.small) {
                                 if isProcessing {
                                     ProgressView()
                                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                         .scaleEffect(0.8)
                                 } else {
-                                    Text("🙏")
-                                        .font(.system(size: 20))
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .font(.system(size: 16))
                                 }
                                 
-                                Text(isProcessing ? "Requesting..." : "Request Complete")
-                                    .font(DesignSystem.Typography.bodyBold)
-                                    .fontWeight(.bold)
+                                Text(isProcessing ? "Requesting..." : "Mark Complete")
+                                    .font(DesignSystem.Typography.body)
+                                    .fontWeight(.semibold)
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
-                            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
+                            .padding(.horizontal, DesignSystem.Spacing.large)
+                            .padding(.vertical, DesignSystem.Spacing.medium)
                             .background(
-                                LinearGradient(
-                                    colors: [
-                                        DesignSystem.Colors.childAccent,
-                                        DesignSystem.Colors.childAccent.opacity(0.8)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(DesignSystem.CornerRadius.button)
-                            .shadow(
-                                color: DesignSystem.Colors.childAccent.opacity(0.3),
-                                radius: 8,
-                                x: 0,
-                                y: 4
+                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.medium)
+                                    .fill(DesignSystem.Colors.childAccent)
                             )
                         }
-                        .buttonStyle(FunScaleButtonStyle())
+                        .buttonStyle(.plain)
                         .disabled(isProcessing)
                         .opacity(isProcessing ? 0.8 : 1.0)
-                    } else if task.isCompleted && !task.isApproved {
-                        // Waiting for parent approval state
-                        VStack(spacing: DesignSystem.Spacing.medium) {
-                            HStack(spacing: DesignSystem.Spacing.buttonIconSpacing) {
-                                Text("⏳")
-                                    .font(.system(size: 20))
-                                
-                                Text("Waiting for Parent Approval")
-                                    .font(DesignSystem.Typography.bodyBold)
-                                    .fontWeight(.bold)
-                            }
-                            .foregroundColor(DesignSystem.Colors.warning)
-                            .padding(.horizontal, DesignSystem.Spacing.buttonHorizontalPadding)
-                            .padding(.vertical, DesignSystem.Spacing.buttonVerticalPadding)
-                            .frame(maxWidth: .infinity)
-                            .frame(minHeight: DesignSystem.Layout.minButtonHeight)
-                            .background(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                                    .fill(DesignSystem.Colors.warning.opacity(0.1))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.button)
-                                    .stroke(DesignSystem.Colors.warning.opacity(0.3), lineWidth: 2)
-                            )
-                            
-                            Text("Your request has been sent to your parent for review.")
-                                .font(DesignSystem.Typography.subheadline)
-                                .foregroundColor(DesignSystem.Colors.secondaryText)
-                                .multilineTextAlignment(.center)
-                        }
                     }
-                }
-                .padding(DesignSystem.Spacing.medium)
-                .background(DesignSystem.Colors.background)
-            }
-        }
-    }
-    
-    private var rewardSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("🎁 Your Reward")
-                .font(DesignSystem.Typography.title2)
-                .fontWeight(.bold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            VStack(spacing: DesignSystem.Spacing.large) {
-                Text("⚡")
-                    .font(.system(size: 48))
-                
-                VStack(spacing: DesignSystem.Spacing.small) {
-                    Text("\(Int(task.rewardSeconds / 60)) minutes")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(DesignSystem.Colors.success)
-                    
-                    Text("of awesome screen time! 🚀")
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(DesignSystem.Spacing.xxLarge)
-            .background(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                DesignSystem.Colors.success.opacity(0.15),
-                                DesignSystem.Colors.success.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
-                    .stroke(DesignSystem.Colors.success.opacity(0.3), lineWidth: 2)
-            )
-        }
-        .padding(DesignSystem.Spacing.cardPadding)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
-                .fill(.white)
-        )
-        .shadow(
-            color: DesignSystem.Shadow.card.color.opacity(0.1),
-            radius: DesignSystem.Shadow.card.radius,
-            x: DesignSystem.Shadow.card.x,
-            y: DesignSystem.Shadow.card.y
-        )
-    }
-    
-    private var statusSection: some View {
-        VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
-            Text("📊 Status")
-                .font(DesignSystem.Typography.title2)
-                .fontWeight(.bold)
-                .foregroundColor(DesignSystem.Colors.primaryText)
-            
-            HStack(spacing: DesignSystem.Spacing.large) {
-                Text(statusEmoji)
-                    .font(.system(size: 40))
-                
-                VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
-                    Text(statusTitle)
-                        .font(DesignSystem.Typography.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(DesignSystem.Colors.primaryText)
-                    
-                    Text(statusDescription)
-                        .font(DesignSystem.Typography.body)
-                        .foregroundColor(DesignSystem.Colors.secondaryText)
+                    .padding(.horizontal, DesignSystem.Spacing.medium)
                 }
                 
                 Spacer()
             }
+            .background(DesignSystem.Colors.groupedBackground)
+            .navigationTitle("Task Details")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        onDismiss()
+                    }
+                    .foregroundColor(DesignSystem.Colors.childAccent)
+                }
+            }
         }
-        .padding(DesignSystem.Spacing.cardPadding)
-        .background(
-            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.xLarge)
-                .fill(.white)
-        )
-        .shadow(
-            color: DesignSystem.Shadow.card.color.opacity(0.1),
-            radius: DesignSystem.Shadow.card.radius,
-            x: DesignSystem.Shadow.card.x,
-            y: DesignSystem.Shadow.card.y
-        )
     }
     
     private var statusEmoji: String {
         if task.isCompleted {
-            return task.isApproved ? "🎉" : "⏳"
+            return task.isApproved ? "✅" : "⏳"
         }
-        return "🎯"
+        return "⭐"
     }
     
     private var statusTitle: String {
         if task.isCompleted {
-            return task.isApproved ? "Completed & Approved!" : "Waiting for Parent"
+            return task.isApproved ? "Approved" : "Pending"
         }
-        return "Ready to Complete!"
+        return "To Do"
     }
     
-    private var statusDescription: String {
+    private var statusColor: Color {
         if task.isCompleted {
-            return task.isApproved ? "Awesome job! Your reward has been added to your screen time." : "Your completion request is being reviewed by your parent. You'll get your reward time once approved!"
+            return task.isApproved ? DesignSystem.Colors.success : DesignSystem.Colors.warning
         }
-        return "Tap 'Request Complete' when you're all done with this task and your parent will review it!"
-    }
-    
-    private func getTaskEmoji(_ title: String) -> String {
-        let lowercased = title.lowercased()
-        if lowercased.contains("clean") || lowercased.contains("room") {
-            return "🧹"
-        } else if lowercased.contains("homework") || lowercased.contains("math") {
-            return "📚"
-        } else if lowercased.contains("dog") || lowercased.contains("pet") {
-            return "🐕"
-        } else if lowercased.contains("piano") || lowercased.contains("music") {
-            return "🎹"
-        } else if lowercased.contains("dish") || lowercased.contains("kitchen") {
-            return "🍽️"
-        } else if lowercased.contains("read") {
-            return "📖"
-        } else {
-            return "⭐"
-        }
+        return DesignSystem.Colors.childAccent
     }
 }
 
