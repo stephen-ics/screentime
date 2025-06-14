@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var familyAuth: FamilyAuthService
     @Environment(\.dismiss) private var dismiss
+    @State private var showingSwitchProfileConfirmation = false
     
     var body: some View {
         NavigationView {
@@ -41,12 +42,19 @@ struct SettingsView: View {
                         EditProfileView()
                     }
                     
-                    NavigationLink("Privacy Settings") {
-                        PrivacySettingsView()
-                    }
-                    
-                    NavigationLink("Notification Preferences") {
-                        NotificationPreferencesView()
+                    if familyAuth.currentProfile?.isParent == true {
+                        NavigationLink("Privacy Settings") {
+                            PrivacySettingsView()
+                        }
+                        
+                        NavigationLink("Notification Preferences") {
+                            NotificationPreferencesView()
+                        }
+                    } else {
+                        NavigationLink("My Preferences") {
+                            Text("Child Preferences - Coming Soon")
+                                .navigationTitle("My Preferences")
+                        }
                     }
                 } header: {
                     Text("Preferences")
@@ -55,23 +63,60 @@ struct SettingsView: View {
                 Section {
                     NavigationLink("Help & Support") {
                         Text("Help & Support - Coming Soon")
+                            .navigationTitle("Help & Support")
                     }
                     
                     NavigationLink("About") {
-                        Text("About - Coming Soon")
+                        Text("About ScreenTime - Coming Soon")
+                            .navigationTitle("About")
                     }
                 } header: {
                     Text("Support")
                 }
                 
                 Section {
+                    Button(action: {
+                        showingSwitchProfileConfirmation = true
+                    }) {
+                        HStack {
+                            Image(systemName: "person.2.fill")
+                                .foregroundColor(.blue)
+                            Text("Switch Profiles")
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    
                     Button("Sign Out", role: .destructive) {
                         signOut()
                     }
+                } header: {
+                    Text("Account Actions")
                 }
             }
-            .navigationTitle("Settings")
+            .navigationTitle(familyAuth.currentProfile?.isParent == true ? "Settings" : "My Account")
             .navigationBarTitleDisplayMode(.large)
+        }
+        .confirmationDialog(
+            "Switch Profiles",
+            isPresented: $showingSwitchProfileConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Switch Profiles") {
+                switchToProfileSelection()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Return to the profile selection screen to switch between family members.")
+        }
+    }
+    
+    private func switchToProfileSelection() {
+        Task {
+            do {
+                try await familyAuth.switchToProfileSelectionWithSecurity()
+            } catch {
+                print("Failed to switch to profile selection: \(error)")
+            }
         }
     }
     
