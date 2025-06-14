@@ -186,9 +186,11 @@ final class ParentDashboardViewModel: ObservableObject {
     
     /// Navigates to analytics view (replaces reports)
     func viewReports() {
-        print("🔘 DEBUG: viewReports() called - selecting analytics tab")
-        selectTab(.analytics)
-        print("🔘 DEBUG: analytics tab selected")
+        print("🔘 DEBUG: viewReports() called - need to navigate to analytics tab")
+        // Since we can't directly control the TabView selection from here,
+        // we'll use a notification approach or need to refactor to use a shared state
+        NotificationCenter.default.post(name: .navigateToAnalytics, object: nil)
+        print("🔘 DEBUG: Posted notification to navigate to analytics")
     }
     
     /// Creates a new task
