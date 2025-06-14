@@ -61,12 +61,6 @@ struct DashboardContentView: View {
                 quickActionsSection
                     .transition(.opacity.combined(with: .scale))
                 
-                // Children Overview (only if has children)
-                if viewModel.state.hasChildren {
-                    childrenOverviewSection
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
-                }
-                
                 // Recent Activity
                 recentActivitySection
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
@@ -94,20 +88,6 @@ struct DashboardContentView: View {
         ) { action in
             viewModel.handleQuickAction(action)
         }
-        .equatable()
-    }
-    
-    @ViewBuilder
-    private var childrenOverviewSection: some View {
-        ChildrenOverviewSection(
-            children: viewModel.state.previewChildren,
-            onChildTapped: { child in
-                viewModel.goToChildDetail(child)
-            },
-            onSeeAllTapped: {
-                viewModel.selectTab(.screenTime)
-            }
-        )
         .equatable()
     }
     
