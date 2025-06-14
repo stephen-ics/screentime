@@ -114,12 +114,24 @@ struct SupabaseTask: Codable, Identifiable, Hashable, Sendable {
         createdAt = try container.decodeDate(forKey: .createdAt)
         updatedAt = try container.decodeDate(forKey: .updatedAt)
         title = try container.decode(String.self, forKey: .title)
-        taskDescription = try container.decodeIfPresent(String.self, forKey: .taskDescription)
+        
+        // Handle optional string that might be empty
+        let taskDescriptionString = try container.decodeIfPresent(String.self, forKey: .taskDescription)
+        taskDescription = taskDescriptionString?.isEmpty == true ? nil : taskDescriptionString
+        
         rewardSeconds = try container.decode(Double.self, forKey: .rewardSeconds)
         completedAt = try container.decodeDateIfPresent(forKey: .completedAt)
         isApproved = try container.decode(Bool.self, forKey: .isApproved)
         isRecurring = try container.decode(Bool.self, forKey: .isRecurring)
-        recurringFrequency = try container.decodeIfPresent(RecurringFrequency.self, forKey: .recurringFrequency)
+        
+        // Handle optional enum that might be empty string
+        let recurringFrequencyString = try container.decodeIfPresent(String.self, forKey: .recurringFrequency)
+        if let freqString = recurringFrequencyString, !freqString.isEmpty {
+            recurringFrequency = RecurringFrequency(rawValue: freqString)
+        } else {
+            recurringFrequency = nil
+        }
+        
         assignedTo = try container.decodeIfPresent(UUID.self, forKey: .assignedTo)
         createdBy = try container.decodeIfPresent(UUID.self, forKey: .createdBy)
     }
@@ -240,36 +252,71 @@ extension SupabaseTask {
 private extension KeyedDecodingContainer {
     func decodeDate(forKey key: Key) throws -> Date {
         if let dateString = try? decode(String.self, forKey: key) {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: dateString) {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = isoFormatter.date(from: dateString) {
                 return date
             }
-            
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: dateString) {
+
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            if let date = isoFormatter.date(from: dateString) {
                 return date
             }
+
+            let customFormatter = DateFormatter()
+            customFormatter.locale = Locale(identifier: "en_US_POSIX")
+            customFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSSSSZ"
+            if let date = customFormatter.date(from: dateString) {
+                return date
+            }
+            customFormatter.dateFormat = "yyyy-MM-dd HH:mm:ssZ"
+            if let date = customFormatter.date(from: dateString) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(forKey: key, in: self, debugDescription: "Date string does not match expected format.")
         }
         
-        return try decode(Date.self, forKey: key)
+        let date = try decode(Date.self, forKey: key)
+        return date
     }
     
     func decodeDateIfPresent(forKey key: Key) throws -> Date? {
         if let dateString = try? decodeIfPresent(String.self, forKey: key) {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = formatter.date(from: dateString) {
-                return date
+            guard !dateString.isEmpty else {
+                return nil
             }
             
-            formatter.formatOptions = [.withInternetDateTime]
-            if let date = formatter.date(from: dateString) {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = isoFormatter.date(from: dateString) {
                 return date
             }
+
+            isoFormatter.formatOptions = [.withInternetDateTime]
+            if let date = isoFormatter.date(from: dateString) {
+                return date
+            }
+
+            let customFormatter = DateFormatter()
+            customFormatter.locale = Locale(identifier: "en_US_POSIX")
+            customFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss.SSSSSSZ"
+            if let date = customFormatter.date(from: dateString) {
+                return date
+            }
+            customFormatter.dateFormat = "yyyy-MM-dd HH:mm:ssZ"
+            if let date = customFormatter.date(from: dateString) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(forKey: key, in: self, debugDescription: "Date string does not match expected format.")
         }
         
-        return try decodeIfPresent(Date.self, forKey: key)
+        let date = try decodeIfPresent(Date.self, forKey: key)
+        if let date = date {
+            return date
+        }
+        return nil
     }
 }
 

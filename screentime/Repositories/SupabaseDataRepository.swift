@@ -164,12 +164,16 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
             throw RepositoryError.configurationMissing
         }
         
-        let createdTask: SupabaseTask = try await database
+        let createdTasks: [SupabaseTask] = try await database
             .from("tasks")
             .insert(task)
-            .single()
+            .select()
             .execute()
             .value
+        
+        guard let createdTask = createdTasks.first else {
+            throw RepositoryError.databaseError("No task returned from insert operation")
+        }
         
         return createdTask
     }
