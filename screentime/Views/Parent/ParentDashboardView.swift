@@ -18,31 +18,27 @@ struct ParentDashboardView: View {
     // MARK: - Body
     
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // Welcome Header
-                    welcomeHeader
-                    
-                    // Quick Actions
-                    quickActionsSection
-                    
-                    // Family Profiles
-                    familyProfilesSection
-                    
-                    // Recent Activity Placeholder
-                    recentActivitySection
-                    
-                    Spacer(minLength: 20)
-                }
-                .padding()
+        ScrollView {
+            VStack(spacing: 16) {
+                // Welcome Header
+                welcomeHeader
+                
+                // Quick Actions
+                quickActionsSection
+                
+                // Recent Activity Placeholder
+                recentActivitySection
+                
+                Spacer(minLength: 20)
             }
-            .navigationTitle("Family Dashboard")
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    SecureChildInterface.SecureSettingsButton {
-                        // Handle settings
-                    }
+            .padding()
+        }
+        .navigationTitle("Family Dashboard")
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                SecureChildInterface.SecureSettingsButton {
+                    // Handle settings
                 }
             }
         }
@@ -124,47 +120,6 @@ struct ParentDashboardView: View {
         }
     }
 
-    // MARK: - Family Profiles
-    private var familyProfilesSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Family Profiles")
-                    .font(.headline)
-                    .fontWeight(.semibold)
-                
-                Spacer()
-                
-                Text("\(familyAuth.availableProfiles.count) profiles")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            
-            if familyAuth.availableProfiles.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "person.2")
-                        .font(.largeTitle)
-                        .foregroundColor(.secondary)
-                    
-                    Text("No family profiles yet")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Add your children to get started")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(24)
-                .background(.regularMaterial)
-                .cornerRadius(12)
-            } else {
-                ForEach(familyAuth.availableProfiles.filter { !$0.isParent }) { profile in
-                    FamilyProfileCard(profile: profile)
-                }
-            }
-        }
-    }
-    
     // MARK: - Recent Activity
     private var recentActivitySection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -222,65 +177,6 @@ struct NewQuickActionCard: View {
             .cornerRadius(12)
         }
         .buttonStyle(.plain)
-    }
-}
-
-// MARK: - Family Profile Card
-struct FamilyProfileCard: View {
-    let profile: FamilyProfile
-    
-    var body: some View {
-        HStack(spacing: 16) {
-            // Profile Avatar
-            ZStack {
-                Circle()
-                    .fill(Color.green.gradient)
-                    .frame(width: 50, height: 50)
-                
-                Text(String(profile.name.prefix(1)))
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-            }
-            
-            // Profile Info
-            VStack(alignment: .leading, spacing: 4) {
-                Text(profile.name)
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-            
-                Text("Child Profile")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                HStack(spacing: 8) {
-                    Image(systemName: "circle.fill")
-                        .font(.system(size: 8))
-                        .foregroundColor(.green)
-            
-                    Text("Active")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            Spacer()
-            
-            // Screen Time Info
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("2h 30m")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.green)
-                
-                Text("remaining")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(16)
-        .background(.regularMaterial)
-        .cornerRadius(12)
     }
 }
 
