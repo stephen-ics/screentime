@@ -22,8 +22,8 @@ struct ChildMainTabView: View {
                 }
                 .tag(1)
             
-            // Accounts Tab (Profile)
-            ChildProfileView()
+            // Accounts Tab - Use unified SettingsView
+            SettingsView()
                 .tabItem {
                     Image(systemName: selectedTab == 2 ? "person.crop.circle.fill" : "person.crop.circle")
                     Text("Accounts")
