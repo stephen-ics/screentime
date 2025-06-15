@@ -7,7 +7,7 @@ struct AddTaskView: View {
     
     // MARK: - Dependencies
     private let dataRepository = SupabaseDataRepository.shared
-    private let onTaskCreated: (() -> Void)?
+    private let onTaskCreated: ((SupabaseTask) -> Void)?
     
     // MARK: - State
     @State private var taskName = ""
@@ -21,7 +21,7 @@ struct AddTaskView: View {
     @State private var errorMessage: String?
     
     // MARK: - Initializer
-    init(onTaskCreated: (() -> Void)? = nil) {
+    init(onTaskCreated: ((SupabaseTask) -> Void)? = nil) {
         self.onTaskCreated = onTaskCreated
     }
     
@@ -209,7 +209,7 @@ struct AddTaskView: View {
                 _ = try await dataRepository.createTask(task)
                 await MainActor.run {
                     dismiss()
-                    onTaskCreated?()
+                    onTaskCreated?(task)
                 }
             } catch {
                 await MainActor.run {

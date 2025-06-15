@@ -79,9 +79,9 @@ struct TaskListView: View {
                 }
             }
             .sheet(isPresented: $showingAddTask) {
-                AddTaskView {
-                    // Callback when task is created
-                    handleTaskUpdated()
+                AddTaskView { newTask in
+                    // Add the task immediately to local state
+                    addTaskToList(newTask)
                 }
             }
             .sheet(isPresented: $showingTaskDetail) {
@@ -93,6 +93,10 @@ struct TaskListView: View {
                             await MainActor.run {
                                 handleTaskUpdated()
                             }
+                        },
+                        onTaskUpdatedImmediately: { updatedTask in
+                            // Update the main list immediately for instant feedback
+                            updateTaskInList(updatedTask)
                         }
                     )
                 }
@@ -509,6 +513,14 @@ struct TaskListView: View {
         refreshTask?.cancel()
         
         let task = Task {
+            // Small delay to allow for batching quick successive operations
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+                try Task.checkCancellation()
+            } catch {
+                // Handle cancellation and errors gracefully
+                return
+            }
             await performRefreshTasks()
         }
         refreshTask = task
@@ -528,6 +540,26 @@ struct TaskListView: View {
         Task {
             await refreshTasks()
         }
+    }
+    
+    @MainActor
+    private func updateTaskInList(_ updatedTask: SupabaseTask) {
+        // Find and update the task immediately in the main list
+        if let index = allTasks.firstIndex(where: { $0.id == updatedTask.id }) {
+            allTasks[index] = updatedTask
+        } else {
+            // If task not found (e.g., just created), add it to the list
+            allTasks.insert(updatedTask, at: 0)
+        }
+        applyFilters()
+    }
+    
+    @MainActor
+    private func addTaskToList(_ newTask: SupabaseTask) {
+        // Add the new task immediately to local state
+        allTasks.insert(newTask, at: 0)
+        totalTaskCount += 1
+        applyFilters()
     }
     
     @MainActor
@@ -748,6 +780,7 @@ struct TaskRow: View {
 struct TaskDetailSheet: View {
     let task: SupabaseTask
     let onTaskUpdated: () async -> Void
+    let onTaskUpdatedImmediately: (SupabaseTask) -> Void
     
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var familyAuth: FamilyAuthService
@@ -756,9 +789,10 @@ struct TaskDetailSheet: View {
     @State private var errorMessage: String?
     @State private var localTask: SupabaseTask
     
-    init(task: SupabaseTask, onTaskUpdated: @escaping () async -> Void) {
+    init(task: SupabaseTask, onTaskUpdated: @escaping () async -> Void, onTaskUpdatedImmediately: @escaping (SupabaseTask) -> Void) {
         self.task = task
         self.onTaskUpdated = onTaskUpdated
+        self.onTaskUpdatedImmediately = onTaskUpdatedImmediately
         self._localTask = State(initialValue: task)
     }
     
@@ -939,6 +973,8 @@ struct TaskDetailSheet: View {
             // First, optimistically update the UI immediately
             await MainActor.run {
                 localTask.completeAndApprove()
+                // Update the main list immediately as well
+                onTaskUpdatedImmediately(localTask)
                 // Close the sheet immediately since the task is now "completed"
                 dismiss()
             }
