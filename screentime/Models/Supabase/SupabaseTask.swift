@@ -204,6 +204,12 @@ struct SupabaseTask: Codable, Identifiable, Hashable, Sendable {
         updatedAt = Date()
     }
     
+    mutating func completeAndApprove() {
+        completedAt = Date()
+        isApproved = true
+        updatedAt = Date()
+    }
+
     mutating func setRewardMinutes(_ minutes: Int32) {
         rewardSeconds = Double(minutes * 60)
         updatedAt = Date()

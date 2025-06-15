@@ -229,6 +229,7 @@ struct TaskListView: View {
     
     // MARK: - Actions
     private func loadTasks() async {
+        print("🔍 DEBUG: Loading tasks")
         isLoading = true
         do {
             guard let currentProfile = familyAuth.currentProfile else {
@@ -584,8 +585,7 @@ struct TaskDetailSheet: View {
                 print("🔍 DEBUG: Marking task as completed: \(task.id)")
                 var updatedTask = task
                 print("🔍 DEBUG: Updated task: \(updatedTask)")
-                updatedTask.complete()
-                updatedTask.approve()
+                updatedTask.completeAndApprove()
                 print("🔍 DEBUG: Updated task after completion: \(updatedTask)")
                 _ = try await dataRepository.updateTask(updatedTask)
                 print("🔍 DEBUG: Task updated successfully")
