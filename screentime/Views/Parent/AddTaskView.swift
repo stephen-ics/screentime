@@ -7,6 +7,7 @@ struct AddTaskView: View {
     
     // MARK: - Dependencies
     private let dataRepository = SupabaseDataRepository.shared
+    private let onTaskCreated: (() -> Void)?
     
     // MARK: - State
     @State private var taskName = ""
@@ -18,6 +19,11 @@ struct AddTaskView: View {
     @State private var showChildPicker = false
     @State private var isSaving = false
     @State private var errorMessage: String?
+    
+    // MARK: - Initializer
+    init(onTaskCreated: (() -> Void)? = nil) {
+        self.onTaskCreated = onTaskCreated
+    }
     
     // MARK: - Body
     var body: some View {
@@ -203,6 +209,7 @@ struct AddTaskView: View {
                 _ = try await dataRepository.createTask(task)
                 await MainActor.run {
                     dismiss()
+                    onTaskCreated?()
                 }
             } catch {
                 await MainActor.run {

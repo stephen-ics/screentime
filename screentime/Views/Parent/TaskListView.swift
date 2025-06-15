@@ -29,6 +29,10 @@ struct TaskListView: View {
     @State private var selectedTimeFilter: TimeFilter = .recent
     @State private var showingFilters = false
     
+    // MARK: - Task Management
+    @State private var refreshTask: Task<Void, Never>?
+    @State private var loadTask: Task<Void, Never>?
+    
     // MARK: - Computed Properties
     private var childProfiles: [FamilyProfile] {
         familyAuth.availableProfiles.filter { $0.role == .child }
@@ -75,13 +79,22 @@ struct TaskListView: View {
                 }
             }
             .sheet(isPresented: $showingAddTask) {
-                AddTaskView()
+                AddTaskView {
+                    // Callback when task is created
+                    handleTaskUpdated()
+                }
             }
             .sheet(isPresented: $showingTaskDetail) {
                 if let task = selectedTask {
-                    TaskDetailSheet(task: task) {
-                        await refreshTasks()
-                    }
+                    TaskDetailSheet(
+                        task: task,
+                        onTaskUpdated: {
+                            // Refresh data in background to sync with server
+                            await MainActor.run {
+                                handleTaskUpdated()
+                            }
+                        }
+                    )
                 }
             }
             .alert("Error", isPresented: .constant(errorMessage != nil)) {
@@ -110,6 +123,11 @@ struct TaskListView: View {
             Task {
                 await refreshTasks()
             }
+        }
+        .onDisappear {
+            // Cancel ongoing tasks when view disappears
+            refreshTask?.cancel()
+            loadTask?.cancel()
         }
     }
     
@@ -393,11 +411,30 @@ struct TaskListView: View {
     
     // MARK: - Actions
     private func loadTasks() async {
+        // Cancel any existing load task
+        loadTask?.cancel()
+        
+        let task = Task {
+            await performLoadTasks()
+        }
+        loadTask = task
+        await task.value
+    }
+    
+    private func performLoadTasks() async {
         print("🔍 DEBUG: Loading tasks - page: \(currentPage)")
         if currentPage == 0 {
-            isLoading = true
+            await MainActor.run {
+                isLoading = true
+                // Clear error message when starting fresh load
+                if currentPage == 0 {
+                    errorMessage = nil
+                }
+            }
         } else {
-            isLoadingMore = true
+            await MainActor.run {
+                isLoadingMore = true
+            }
         }
         
         do {
@@ -406,6 +443,10 @@ struct TaskListView: View {
             }
             
             let dateRange = selectedTimeFilter.dateRange
+            
+            // Check for cancellation
+            try Task.checkCancellation()
+            
             let newTasks = try await dataRepository.getTasksCreatedBy(
                 userId: currentProfile.authUserId,
                 fromDate: dateRange.from,
@@ -414,40 +455,88 @@ struct TaskListView: View {
                 offset: currentPage * pageSize
             )
             
+            // Check for cancellation again
+            try Task.checkCancellation()
+            
             // Get total count for the current filter
-            totalTaskCount = try await dataRepository.getTaskCountCreatedBy(
+            let newTotalCount = try await dataRepository.getTaskCountCreatedBy(
                 userId: currentProfile.authUserId,
                 fromDate: dateRange.from,
                 toDate: dateRange.to
             )
             
-            if currentPage == 0 {
-                allTasks = newTasks
-            } else {
-                allTasks.append(contentsOf: newTasks)
+            // Check for cancellation before updating UI
+            try Task.checkCancellation()
+            
+            await MainActor.run {
+                totalTaskCount = newTotalCount
+                
+                if currentPage == 0 {
+                    allTasks = newTasks
+                } else {
+                    allTasks.append(contentsOf: newTasks)
+                }
+                
+                hasMoreTasks = newTasks.count == pageSize && allTasks.count < totalTaskCount
+                applyFilters()
             }
             
-            hasMoreTasks = newTasks.count == pageSize && allTasks.count < totalTaskCount
-            applyFilters()
-            
+        } catch is CancellationError {
+            // Silently handle cancellation - don't show error to user
+            print("🔍 DEBUG: Task loading was cancelled")
         } catch {
-            errorMessage = error.localizedDescription
+            await MainActor.run {
+                errorMessage = error.localizedDescription
+            }
         }
         
-        isLoading = false
-        isLoadingMore = false
+        await MainActor.run {
+            isLoading = false
+            isLoadingMore = false
+        }
     }
     
     private func loadMoreTasks() async {
         guard hasMoreTasks && !isLoadingMore else { return }
-        currentPage += 1
+        await MainActor.run {
+            currentPage += 1
+        }
         await loadTasks()
     }
     
     private func refreshTasks() async {
+        // Cancel any existing refresh task
+        refreshTask?.cancel()
+        
+        let task = Task {
+            await performRefreshTasks()
+        }
+        refreshTask = task
+        await task.value
+    }
+    
+    @MainActor
+    private func performRefreshTasks() async {
         currentPage = 0
         hasMoreTasks = true
         await loadTasks()
+    }
+    
+    @MainActor
+    private func handleTaskUpdated() {
+        // Trigger a refresh when a task is updated
+        Task {
+            await refreshTasks()
+        }
+    }
+    
+    @MainActor
+    private func updateTaskOptimistically(_ taskId: UUID, completion: @escaping (inout SupabaseTask) -> Void) {
+        // Find and update the task immediately in local state for instant UI feedback
+        if let index = allTasks.firstIndex(where: { $0.id == taskId }) {
+            completion(&allTasks[index])
+            applyFilters()
+        }
     }
     
     private func applyFilters() {
@@ -665,6 +754,13 @@ struct TaskDetailSheet: View {
     @StateObject private var dataRepository = SupabaseDataRepository.shared
     @State private var isUpdating = false
     @State private var errorMessage: String?
+    @State private var localTask: SupabaseTask
+    
+    init(task: SupabaseTask, onTaskUpdated: @escaping () async -> Void) {
+        self.task = task
+        self.onTaskUpdated = onTaskUpdated
+        self._localTask = State(initialValue: task)
+    }
     
     var body: some View {
         NavigationView {
@@ -704,12 +800,12 @@ struct TaskDetailSheet: View {
     
     private var taskHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(task.title)
+            Text(localTask.title)
                 .font(.title2)
                 .fontWeight(.bold)
             
             HStack {
-                Label(task.statusDescription, systemImage: statusIcon)
+                Label(localTask.statusDescription, systemImage: statusIcon)
                     .font(.subheadline)
                     .foregroundColor(statusColor)
                     .padding(.horizontal, 12)
@@ -738,7 +834,7 @@ struct TaskDetailSheet: View {
     
     private var taskDetails: some View {
         VStack(alignment: .leading, spacing: 16) {
-            if let description = task.taskDescription, !description.isEmpty {
+            if let description = localTask.taskDescription, !description.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Description")
                         .font(.headline)
@@ -754,7 +850,7 @@ struct TaskDetailSheet: View {
                 HStack {
                     Image(systemName: "clock")
                         .foregroundColor(.blue)
-                    Text(task.formattedReward)
+                    Text(localTask.formattedReward)
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
@@ -766,13 +862,13 @@ struct TaskDetailSheet: View {
                 HStack {
                     Image(systemName: "calendar")
                         .foregroundColor(.blue)
-                    Text(task.createdAt, style: .date)
+                    Text(localTask.createdAt, style: .date)
                         .font(.body)
                         .foregroundColor(.secondary)
                 }
             }
             
-            if let completedAt = task.completedAt {
+            if let completedAt = localTask.completedAt {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Completed")
                         .font(.headline)
@@ -790,7 +886,7 @@ struct TaskDetailSheet: View {
     
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            if !task.isCompleted {
+            if !localTask.isCompleted {
                 Button(action: markAsCompleted) {
                     HStack {
                         if isUpdating {
@@ -816,21 +912,21 @@ struct TaskDetailSheet: View {
     }
     
     private var assignedChildName: String? {
-        guard let assignedTo = task.assignedTo else { return nil }
+        guard let assignedTo = localTask.assignedTo else { return nil }
         return familyAuth.availableProfiles.first { $0.id == assignedTo }?.name
     }
     
     private var statusIcon: String {
-        if task.isCompleted {
-            return task.isApproved ? "checkmark.circle.fill" : "clock.fill"
+        if localTask.isCompleted {
+            return localTask.isApproved ? "checkmark.circle.fill" : "clock.fill"
         } else {
             return "arrow.right.circle.fill"
         }
     }
     
     private var statusColor: Color {
-        if task.isCompleted {
-            return task.isApproved ? .green : .orange
+        if localTask.isCompleted {
+            return localTask.isApproved ? .green : .orange
         } else {
             return .blue
         }
@@ -839,23 +935,35 @@ struct TaskDetailSheet: View {
     private func markAsCompleted() {
         Task {
             isUpdating = true
+            
+            // First, optimistically update the UI immediately
+            await MainActor.run {
+                localTask.completeAndApprove()
+                // Close the sheet immediately since the task is now "completed"
+                dismiss()
+            }
+            
             do {
                 print("🔍 DEBUG: Marking task as completed: \(task.id)")
                 var updatedTask = task
-                print("🔍 DEBUG: Updated task: \(updatedTask)")
                 updatedTask.completeAndApprove()
                 print("🔍 DEBUG: Updated task after completion: \(updatedTask)")
                 _ = try await dataRepository.updateTask(updatedTask)
                 print("🔍 DEBUG: Task updated successfully")
+                
+                // Refresh the list in the background to sync with server
                 await onTaskUpdated()
-                await MainActor.run {
-                    dismiss()
-                }
+                
             } catch {
                 print("🔍 DEBUG: Error marking task as completed: \(error)")
-                errorMessage = error.localizedDescription
+                
+                // If the network call fails, refresh to restore correct state
+                await onTaskUpdated()
             }
-            isUpdating = false
+            
+            await MainActor.run {
+                isUpdating = false
+            }
         }
     }
 }
