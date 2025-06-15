@@ -143,6 +143,47 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
         return tasks
     }
     
+    func getTasks(
+        for userId: UUID,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> [SupabaseTask] {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        var query = database
+            .from("tasks")
+            .select()
+            .eq("assigned_to", value: userId)
+            .order("created_at", ascending: false)
+            
+        if let limit = limit {
+            if let offset = offset {
+                query = query.range(from: offset, to: offset + limit - 1)
+            } else {
+                query = query.limit(limit)
+            }
+        }
+        
+        let tasks: [SupabaseTask] = try await query.execute().value
+        return tasks
+    }
+    
+    func getTaskCount(for userId: UUID) async throws -> Int {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        let response = try await database
+            .from("tasks")
+            .select("*", head: true, count: .exact)
+            .eq("assigned_to", value: userId)
+            .execute()
+            
+        return response.count ?? 0
+    }
+    
     func getTasksCreatedBy(userId: UUID) async throws -> [SupabaseTask] {
         guard let database = supabase.database else {
             throw RepositoryError.configurationMissing

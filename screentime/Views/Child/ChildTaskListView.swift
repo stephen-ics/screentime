@@ -1,135 +1,23 @@
 import SwiftUI
 
-// MARK: - ChildTaskListViewModel
-@MainActor
-final class ChildTaskListViewModel: ObservableObject {
-    @Published var tasks: [SupabaseTask] = []
-    @Published var isLoading = true
-    @Published var completedTasksToday = 0
-    @Published var selectedTask: SupabaseTask?
-    @Published var showingTaskDetail = false
-    @Published var processingTaskId: UUID?
-    
-    init() {
-        loadMockData()
-    }
-    
-    func loadData() async {
-        isLoading = true
-        defer { isLoading = false }
-        
-        // TODO: Replace with actual Supabase data loading
-        loadMockData()
-    }
-    
-    func refreshData() async {
-        await loadData()
-    }
-    
-    func completeTask(_ task: SupabaseTask) {
-        // Set processing state
-        processingTaskId = task.id
-        
-        // Simulate a brief delay for user feedback
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            // Instead of completing immediately, request completion from parent
-            self.requestTaskCompletion(task)
-            
-            // Clear processing state
-            self.processingTaskId = nil
-            
-            // Close task detail if it's open
-            if self.selectedTask?.id == task.id {
-                self.selectedTask = nil
-            }
-        }
-    }
-    
-    func requestTaskCompletion(_ task: SupabaseTask) {
-        // Mark task as pending approval
-        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
-            // Create updated task with completion request
-            var updatedTask = task
-            updatedTask.completedAt = Date() // Set completion time
-            updatedTask.isApproved = false // Waiting for parent approval
-            
-            // Update the task in the array
-            tasks[index] = SupabaseTask(
-                id: updatedTask.id,
-                createdAt: updatedTask.createdAt,
-                updatedAt: Date(),
-                title: updatedTask.title,
-                taskDescription: updatedTask.taskDescription,
-                rewardSeconds: updatedTask.rewardSeconds,
-                completedAt: updatedTask.completedAt,
-                isApproved: updatedTask.isApproved,
-                isRecurring: updatedTask.isRecurring,
-                recurringFrequency: updatedTask.recurringFrequency,
-                assignedTo: updatedTask.assignedTo,
-                createdBy: updatedTask.createdBy
-            )
-            
-            // TODO: Send notification to parent
-            // This would integrate with your notification system
-            print("🔔 Notification sent to parent: Child requested completion of '\(task.title)'")
-            print("📝 Task status updated - ID: \(task.id), Completed: \(updatedTask.completedAt != nil), Approved: \(updatedTask.isApproved)")
-        }
-    }
-    
-    private func loadMockData() {
-        // Mock tasks for the child with fun emojis
-        tasks = [
-            SupabaseTask(
-                title: "🧹 Clean Your Room",
-                taskDescription: "Make your bed, organize toys, and put clothes in the hamper",
-                rewardSeconds: 900 // 15 minutes
-            ),
-            SupabaseTask(
-                title: "📚 Math Homework",
-                taskDescription: "Complete pages 45-47 in your math workbook",
-                rewardSeconds: 1800 // 30 minutes
-            ),
-            SupabaseTask(
-                title: "🐕 Feed the Dog",
-                taskDescription: "Give Max his food and fresh water bowls",
-                rewardSeconds: 600, // 10 minutes
-                completedAt: Calendar.current.date(byAdding: .hour, value: -2, to: Date())
-            ),
-            SupabaseTask(
-                title: "🎹 Practice Piano",
-                taskDescription: "Practice scales and your new song for 20 minutes",
-                rewardSeconds: 1200 // 20 minutes
-            ),
-            SupabaseTask(
-                title: "🍽️ Help with Dishes",
-                taskDescription: "Load the dishwasher and wipe down the counters",
-                rewardSeconds: 600 // 10 minutes
-            ),
-            SupabaseTask(
-                title: "📖 Read for 30 Minutes",
-                taskDescription: "Read your chapter book for at least 30 minutes",
-                rewardSeconds: 1500, // 25 minutes
-                completedAt: Calendar.current.date(byAdding: .day, value: -1, to: Date()),
-                isApproved: true
-            )
-        ]
-        
-        // Count completed tasks today
-        let today = Calendar.current.startOfDay(for: Date())
-        completedTasksToday = tasks.filter { task in
-            if let completedAt = task.completedAt {
-                return Calendar.current.startOfDay(for: completedAt) == today
-            }
-            return false
-        }.count
-        
-        isLoading = false
-    }
-}
-
 struct ChildTaskListView: View {
-    @StateObject private var viewModel = ChildTaskListViewModel()
+    @StateObject private var dataRepository = SupabaseDataRepository.shared
+    @EnvironmentObject private var familyAuth: FamilyAuthService
     
+    // MARK: - State
+    @State private var tasks: [SupabaseTask] = []
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var selectedTask: SupabaseTask?
+    @State private var processingTaskId: UUID?
+    
+    // MARK: - Pagination State
+    @State private var currentPage = 0
+    @State private var hasMoreTasks = true
+    @State private var totalTaskCount = 0
+    @State private var isLoadingMore = false
+    private let pageSize = 20
+
     var body: some View {
         NavigationView {
             VStack(spacing: 0) {
@@ -152,24 +40,24 @@ struct ChildTaskListView: View {
             .navigationTitle("⭐ My Tasks")
             .navigationBarTitleDisplayMode(.large)
             .refreshable {
-                await viewModel.refreshData()
+                await loadTasks(refresh: true)
             }
-            .sheet(item: $viewModel.selectedTask) { task in
+            .sheet(item: $selectedTask) { task in
                 ChildTaskDetailView(
                     task: task,
-                    isProcessing: viewModel.processingTaskId == task.id,
+                    isProcessing: processingTaskId == task.id,
                     onComplete: {
-                        viewModel.completeTask(task)
+                        completeTask(task)
                     },
                     onDismiss: {
-                        viewModel.selectedTask = nil
+                        selectedTask = nil
                     }
                 )
             }
         }
         .navigationViewStyle(.stack)
         .task {
-            await viewModel.loadData()
+            await loadTasks()
         }
     }
     
@@ -186,7 +74,7 @@ struct ChildTaskListView: View {
                 
                 FunStatBubble(
                     emoji: "🎉",
-                    value: "\(viewModel.completedTasksToday)",
+                    value: "\(completedTasksToday)",
                     label: "Done Today",
                     color: DesignSystem.Colors.success
                 )
@@ -213,9 +101,9 @@ struct ChildTaskListView: View {
     // MARK: - Task Content
     private var taskContent: some View {
         Group {
-            if viewModel.isLoading {
+            if isLoading && currentPage == 0 {
                 loadingView
-            } else if viewModel.tasks.isEmpty {
+            } else if tasks.isEmpty && !isLoading {
                 emptyStateView
             } else {
                 tasksList
@@ -267,27 +155,63 @@ struct ChildTaskListView: View {
                     taskSection(
                         title: "🎯 Tasks to Complete",
                         subtitle: "Complete these to earn screen time!",
-                        tasks: pendingTasks,
-                        showCompleted: false
+                        tasks: pendingTasks
                     )
                 }
                 
+                // Pending approval section
+                if !pendingApprovalTasks.isEmpty {
+                    taskSection(
+                        title: "⏳ Pending Approval",
+                        subtitle: "Your parents will review these soon!",
+                        tasks: pendingApprovalTasks
+                    )
+                }
+
                 // Completed tasks section
                 if !completedTasks.isEmpty {
                     taskSection(
-                        title: "✅ Completed Tasks",
+                        title: "✅ Approved Tasks",
                         subtitle: "Great job on these!",
-                        tasks: completedTasks,
-                        showCompleted: true
+                        tasks: completedTasks
                     )
+                }
+
+                // Load More Button
+                if hasMoreTasks {
+                    loadMoreButton
                 }
             }
             .padding(DesignSystem.Spacing.medium)
-            .padding(.bottom, DesignSystem.Spacing.xxxLarge) // Extra padding for tab bar
+            .padding(.bottom, DesignSystem.Spacing.xxxLarge)
         }
     }
+
+    private var loadMoreButton: some View {
+        Button(action: {
+            Task { await loadMoreTasks() }
+        }) {
+            HStack(spacing: 8) {
+                if isLoadingMore {
+                    ProgressView()
+                        .tint(DesignSystem.Colors.childAccent)
+                } else {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .foregroundColor(DesignSystem.Colors.childAccent)
+                }
+                Text(isLoadingMore ? "Loading More..." : "Load More Tasks")
+                    .font(.headline)
+                    .foregroundColor(DesignSystem.Colors.childAccent)
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(.white)
+            .cornerRadius(DesignSystem.CornerRadius.large)
+        }
+        .disabled(isLoadingMore)
+    }
     
-    private func taskSection(title: String, subtitle: String, tasks: [SupabaseTask], showCompleted: Bool) -> some View {
+    private func taskSection(title: String, subtitle: String, tasks: [SupabaseTask]) -> some View {
         VStack(alignment: .leading, spacing: DesignSystem.Spacing.medium) {
             VStack(alignment: .leading, spacing: DesignSystem.Spacing.small) {
                 HStack {
@@ -305,8 +229,8 @@ struct ChildTaskListView: View {
                         .padding(.horizontal, DesignSystem.Spacing.medium)
                         .padding(.vertical, DesignSystem.Spacing.xSmall)
                         .background(
-                            RoundedRectangle(cornerRadius: DesignSystem.CornerRadius.pill)
-                                .fill(showCompleted ? DesignSystem.Colors.success : DesignSystem.Colors.childAccent)
+                            Capsule()
+                                .fill(colorForSection(title: title))
                         )
                 }
                 
@@ -316,15 +240,15 @@ struct ChildTaskListView: View {
             }
             
             VStack(spacing: DesignSystem.Spacing.medium) {
-                ForEach(tasks, id: \.id) { task in
+                ForEach(tasks) { task in
                     FunChildTaskCard(
                         task: task,
-                        isProcessing: viewModel.processingTaskId == task.id,
+                        isProcessing: processingTaskId == task.id,
                         onTap: {
-                            viewModel.selectedTask = task
+                            selectedTask = task
                         },
                         onComplete: {
-                            viewModel.completeTask(task)
+                            completeTask(task)
                         }
                     )
                 }
@@ -342,22 +266,135 @@ struct ChildTaskListView: View {
             y: DesignSystem.Shadow.card.y
         )
     }
+
+    private func colorForSection(title: String) -> Color {
+        if title.contains("To Complete") {
+            return DesignSystem.Colors.childAccent
+        } else if title.contains("Pending") {
+            return DesignSystem.Colors.warning
+        } else {
+            return DesignSystem.Colors.success
+        }
+    }
+
+    // MARK: - Data Logic
+    private func loadTasks(refresh: Bool = false) async {
+        if refresh {
+            currentPage = 0
+            hasMoreTasks = true
+        }
+
+        guard hasMoreTasks, !isLoadingMore else { return }
+
+        if currentPage == 0 {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
+        
+        errorMessage = nil
+        
+        guard let profile = familyAuth.currentProfile else {
+            errorMessage = "Could not load profile. Please try again."
+            isLoading = false
+            isLoadingMore = false
+            return
+        }
+
+        do {
+            if currentPage == 0 {
+                totalTaskCount = try await dataRepository.getTaskCount(for: profile.id)
+            }
+
+            let newTasks = try await dataRepository.getTasks(for: profile.id, limit: pageSize, offset: currentPage * pageSize)
+            
+            if refresh {
+                tasks = newTasks
+            } else {
+                tasks.append(contentsOf: newTasks)
+            }
+
+            hasMoreTasks = tasks.count < totalTaskCount
+            currentPage += 1
+
+        } catch {
+            errorMessage = "Failed to load tasks: \(error.localizedDescription)"
+            print("❌ Error loading tasks: \(error)")
+        }
+        
+        isLoading = false
+        isLoadingMore = false
+    }
+
+    private func loadMoreTasks() async {
+        await loadTasks()
+    }
     
+    private func completeTask(_ task: SupabaseTask) {
+        processingTaskId = task.id
+        
+        // Optimistic UI update
+        if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+            tasks[index].completedAt = Date()
+            tasks[index].isApproved = false
+        }
+        
+        Task {
+            // Give UI time to update
+            try? await Task.sleep(for: .seconds(0.5))
+            
+            do {
+                _ = try await dataRepository.updateTask(tasks.first(where: { $0.id == task.id })!)
+                print("✅ Task completion requested and updated in Supabase.")
+            } catch {
+                errorMessage = "Failed to submit task for approval. Please try again."
+                print("❌ Error updating task completion status: \(error)")
+                // Revert optimistic update on failure
+                if let index = tasks.firstIndex(where: { $0.id == task.id }) {
+                    tasks[index].completedAt = nil
+                }
+            }
+            
+            await MainActor.run {
+                processingTaskId = nil
+                if selectedTask?.id == task.id {
+                    selectedTask = nil
+                }
+            }
+        }
+    }
+
     // MARK: - Computed Properties
     private var pendingTasks: [SupabaseTask] {
-        viewModel.tasks
+        tasks
             .filter { !$0.isCompleted }
-            .sorted(by: { $0.rewardSeconds > $1.rewardSeconds }) // Sort by reward amount
+            .sorted(by: { $0.createdAt > $1.createdAt })
+    }
+
+    private var pendingApprovalTasks: [SupabaseTask] {
+        tasks
+            .filter { $0.isCompleted && !$0.isApproved }
+            .sorted(by: { ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast) })
     }
     
     private var completedTasks: [SupabaseTask] {
-        viewModel.tasks
-            .filter { $0.isCompleted }
+        tasks
+            .filter { $0.isCompleted && $0.isApproved }
             .sorted(by: { 
-                ($0.completedAt ?? Date.distantPast) > ($1.completedAt ?? Date.distantPast)
+                ($0.completedAt ?? .distantPast) > ($1.completedAt ?? .distantPast)
             })
     }
     
+    private var completedTasksToday: Int {
+        let today = Calendar.current.startOfDay(for: Date())
+        return tasks.filter { task in
+            if let completedAt = task.completedAt {
+                return Calendar.current.isDate(completedAt, inSameDayAs: today)
+            }
+            return false
+        }.count
+    }
+
     private var totalPendingReward: Int {
         Int(pendingTasks.reduce(0) { $0 + $1.rewardSeconds } / 60)
     }
@@ -667,5 +704,6 @@ struct ChildTaskDetailView: View {
 struct ChildTaskListView_Previews: PreviewProvider {
     static var previews: some View {
         ChildTaskListView()
+            .environmentObject(FamilyAuthService.shared)
     }
 } 
