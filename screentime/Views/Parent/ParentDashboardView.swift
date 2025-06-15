@@ -164,42 +164,7 @@ struct ParentDashboardView: View {
     }
 }
 
-// MARK: - Quick Action Card
-struct TEMP_DELETE_QuickActionCard: View {
-    let action: QuickAction
-    let count: Int?
-    let onTap: () -> Void
-    
-    var body: some View {
-        Button(action: onTap) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    
-                    Image(systemName: action.icon)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.blue)
-                }
-                
-                Text(action.title)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial)
-            .cornerRadius(12)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 // MARK: - Preview
-
 struct ParentDashboardView_Previews: PreviewProvider {
     static var previews: some View {
         ParentDashboardView()
