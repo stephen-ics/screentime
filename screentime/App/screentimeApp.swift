@@ -174,6 +174,7 @@ struct ParentMainTabView: View {
             NavigationView {
                 ParentDashboardView()
             }
+            .navigationViewStyle(.stack)
             .tabItem {
                 Image(systemName: selectedTab == 0 ? "square.grid.2x2.fill" : "square.grid.2x2")
                 Text("Dashboard")
@@ -192,6 +193,7 @@ struct ParentMainTabView: View {
             NavigationView {
                 AnalyticsView()
             }
+            .navigationViewStyle(.stack)
             .tabItem {
                 Image(systemName: selectedTab == 2 ? "chart.bar.fill" : "chart.bar")
                 Text("Analytics")

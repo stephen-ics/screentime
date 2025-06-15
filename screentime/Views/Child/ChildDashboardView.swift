@@ -209,6 +209,7 @@ struct ChildDashboardView: View {
                 )
             }
         }
+        .navigationViewStyle(.stack)
         .task {
             await viewModel.loadData()
         }

@@ -73,6 +73,7 @@ struct ProfileSelectionView: View {
                 .navigationBarHidden(true)
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(isPresented: $showingAddChild) {
             AddChildProfileSheet()
                 .environmentObject(familyAuth)

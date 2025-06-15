@@ -111,6 +111,7 @@ struct TaskListView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .task {
             await loadTasks()
         }

@@ -8,6 +8,7 @@ struct ParentDashboardView: View {
     // MARK: - Environment Objects
     @EnvironmentObject private var familyAuth: FamilyAuthService
     @EnvironmentObject private var router: AppRouter
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     
     // MARK: - State Objects
     @StateObject private var viewModel = ParentDashboardViewModel()
@@ -16,19 +17,27 @@ struct ParentDashboardView: View {
     
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
-                // Welcome Header
-                welcomeHeader
-                
-                // Quick Actions
-                quickActionsSection
-                
-                // Recent Activity Placeholder
-                recentActivitySection
-                
-                Spacer(minLength: 24)
+            if horizontalSizeClass == .regular {
+                // iPad layout
+                VStack(spacing: 20) {
+                    welcomeHeader
+                    
+                    HStack(alignment: .top, spacing: 20) {
+                        quickActionsSection
+                        recentActivitySection
+                    }
+                }
+                .padding()
+            } else {
+                // iPhone layout
+                VStack(spacing: 20) {
+                    welcomeHeader
+                    quickActionsSection
+                    recentActivitySection
+                    Spacer(minLength: 24)
+                }
+                .padding()
             }
-            .padding()
         }
         .navigationTitle("Family Dashboard")
         .navigationBarTitleDisplayMode(.large)
@@ -156,26 +165,25 @@ struct ParentDashboardView: View {
 }
 
 // MARK: - Quick Action Card
-struct NewQuickActionCard: View {
-    let title: String
-    let icon: String
-    let color: Color
-    let action: () -> Void
+struct TEMP_DELETE_QuickActionCard: View {
+    let action: QuickAction
+    let count: Int?
+    let onTap: () -> Void
     
     var body: some View {
-        Button(action: action) {
+        Button(action: onTap) {
             VStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(color.opacity(0.2))
+                        .fill(Color.blue.opacity(0.2))
                         .frame(width: 44, height: 44)
                     
-                    Image(systemName: icon)
+                    Image(systemName: action.icon)
                         .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(color)
+                        .foregroundColor(.blue)
                 }
                 
-                Text(title)
+                Text(action.title)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.primary)

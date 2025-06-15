@@ -96,6 +96,7 @@ struct SettingsView: View {
             .navigationTitle(familyAuth.currentProfile?.isParent == true ? "Settings" : "My Account")
             .navigationBarTitleDisplayMode(.large)
         }
+        .navigationViewStyle(.stack)
         .confirmationDialog(
             "Switch Profiles",
             isPresented: $showingSwitchProfileConfirmation,

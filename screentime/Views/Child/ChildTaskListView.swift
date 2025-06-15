@@ -167,6 +167,7 @@ struct ChildTaskListView: View {
                 )
             }
         }
+        .navigationViewStyle(.stack)
         .task {
             await viewModel.loadData()
         }
