@@ -159,6 +159,85 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
         return tasks
     }
     
+    func getTasksCreatedBy(
+        userId: UUID,
+        fromDate: Date? = nil,
+        toDate: Date? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> [SupabaseTask] {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        // Build the base query
+        var query = database
+            .from("tasks")
+            .select()
+            .eq("created_by", value: userId)
+        
+        // Apply date filters if provided
+        if let fromDate = fromDate {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            query = query.gte("created_at", value: isoFormatter.string(from: fromDate))
+        }
+        
+        if let toDate = toDate {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            query = query.lte("created_at", value: isoFormatter.string(from: toDate))
+        }
+        
+        // Build the final query with ordering and pagination
+        let finalQuery = query.order("created_at", ascending: false)
+        
+        let tasks: [SupabaseTask]
+        if let limit = limit {
+            if let offset = offset {
+                tasks = try await finalQuery.range(from: offset, to: offset + limit - 1).execute().value
+            } else {
+                tasks = try await finalQuery.limit(limit).execute().value
+            }
+        } else {
+            tasks = try await finalQuery.execute().value
+        }
+        
+        return tasks
+    }
+    
+    func getTaskCountCreatedBy(
+        userId: UUID,
+        fromDate: Date? = nil,
+        toDate: Date? = nil
+    ) async throws -> Int {
+        guard let database = supabase.database else {
+            throw RepositoryError.configurationMissing
+        }
+        
+        // Build count query
+        var query = database
+            .from("tasks")
+            .select("*", head: true, count: .exact)
+            .eq("created_by", value: userId)
+        
+        // Apply date filters if provided
+        if let fromDate = fromDate {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            query = query.gte("created_at", value: isoFormatter.string(from: fromDate))
+        }
+        
+        if let toDate = toDate {
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            query = query.lte("created_at", value: isoFormatter.string(from: toDate))
+        }
+        
+        let response = try await query.execute()
+        return response.count ?? 0
+    }
+    
     func createTask(_ task: SupabaseTask) async throws -> SupabaseTask {
         guard let database = supabase.database else {
             throw RepositoryError.configurationMissing
@@ -648,6 +727,24 @@ final class SupabaseDataRepository: ObservableObject, @unchecked Sendable {
     
     func subscribeToTimeRequestUpdates(userId: UUID) -> AnyPublisher<DatabaseEvent, Never> {
         return Empty().eraseToAnyPublisher()
+    }
+    
+    func getTasksCreatedBy(
+        userId: UUID,
+        fromDate: Date? = nil,
+        toDate: Date? = nil,
+        limit: Int? = nil,
+        offset: Int? = nil
+    ) async throws -> [SupabaseTask] {
+        throw RepositoryError.configurationMissing
+    }
+    
+    func getTaskCountCreatedBy(
+        userId: UUID,
+        fromDate: Date? = nil,
+        toDate: Date? = nil
+    ) async throws -> Int {
+        throw RepositoryError.configurationMissing
     }
     #endif
 }

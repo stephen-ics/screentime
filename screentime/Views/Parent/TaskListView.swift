@@ -10,20 +10,41 @@ struct TaskListView: View {
     @State private var allTasks: [SupabaseTask] = []
     @State private var filteredTasks: [SupabaseTask] = []
     @State private var isLoading = true
+    @State private var isLoadingMore = false
     @State private var errorMessage: String?
     @State private var showingAddTask = false
     @State private var selectedTask: SupabaseTask?
     @State private var showingTaskDetail = false
     
+    // MARK: - Pagination State
+    @State private var currentPage = 0
+    @State private var hasMoreTasks = true
+    @State private var totalTaskCount = 0
+    private let pageSize = 25
+    
     // MARK: - Filter State
     @State private var searchText = ""
     @State private var selectedChildFilter: FamilyProfile? = nil
     @State private var selectedStatusFilter: TaskStatusFilter = .all
+    @State private var selectedTimeFilter: TimeFilter = .recent
     @State private var showingFilters = false
     
     // MARK: - Computed Properties
     private var childProfiles: [FamilyProfile] {
         familyAuth.availableProfiles.filter { $0.role == .child }
+    }
+    
+    private var groupedTasks: [(String, [SupabaseTask])] {
+        let sortedTasks = filteredTasks.sorted { $0.createdAt > $1.createdAt }
+        return Dictionary(grouping: sortedTasks) { task in
+            taskDateGroup(for: task.createdAt)
+        }
+        .sorted { first, second in
+            let order = ["Today", "Yesterday", "This Week", "Last Week", "This Month", "Earlier"]
+            let firstIndex = order.firstIndex(of: first.key) ?? order.count
+            let secondIndex = order.firstIndex(of: second.key) ?? order.count
+            return firstIndex < secondIndex
+        }
     }
     
     // MARK: - Body
@@ -33,30 +54,11 @@ struct TaskListView: View {
                 // Filter Section
                 filterSection
                 
+                // Task Count and Load Status
+                taskStatusHeader
+                
                 // Task List
-                Group {
-                    if isLoading {
-                        ProgressView("Loading tasks...")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if filteredTasks.isEmpty {
-                        ContentUnavailableView(
-                            hasFiltersApplied ? "No Matching Tasks" : "No Tasks",
-                            systemImage: hasFiltersApplied ? "magnifyingglass" : "checkmark.circle",
-                            description: Text(hasFiltersApplied ? "Try adjusting your filters" : "Add tasks to help your child manage their screen time")
-                        )
-                    } else {
-                        List {
-                            ForEach(filteredTasks) { task in
-                                TaskRow(task: task)
-                                    .onTapGesture {
-                                        selectedTask = task
-                                        showingTaskDetail = true
-                                    }
-                            }
-                        }
-                        .listStyle(PlainListStyle())
-                    }
-                }
+                mainContent
             }
             .navigationTitle("Tasks")
             .navigationBarTitleDisplayMode(.inline)
@@ -78,7 +80,7 @@ struct TaskListView: View {
             .sheet(isPresented: $showingTaskDetail) {
                 if let task = selectedTask {
                     TaskDetailSheet(task: task) {
-                        await loadTasks()
+                        await refreshTasks()
                     }
                 }
             }
@@ -104,6 +106,127 @@ struct TaskListView: View {
         .onChange(of: selectedStatusFilter) { _, _ in
             applyFilters()
         }
+        .onChange(of: selectedTimeFilter) { _, _ in
+            Task {
+                await refreshTasks()
+            }
+        }
+    }
+    
+    // MARK: - Main Content
+    private var mainContent: some View {
+        Group {
+            if isLoading && currentPage == 0 {
+                ProgressView("Loading tasks...")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if filteredTasks.isEmpty && !isLoading {
+                emptyStateView
+            } else {
+                taskListView
+            }
+        }
+    }
+    
+    // MARK: - Empty State View
+    private var emptyStateView: some View {
+        ContentUnavailableView(
+            hasFiltersApplied ? "No Matching Tasks" : "No Tasks",
+            systemImage: hasFiltersApplied ? "magnifyingglass" : "checkmark.circle",
+            description: Text(hasFiltersApplied ? "Try adjusting your filters" : "Add tasks to help your child manage their screen time")
+        )
+    }
+    
+    // MARK: - Task List View
+    private var taskListView: some View {
+        List {
+            ForEach(groupedTasks, id: \.0) { section, tasks in
+                Section(header: sectionHeader(section)) {
+                    ForEach(tasks) { task in
+                        TaskRow(task: task)
+                            .onTapGesture {
+                                selectedTask = task
+                                showingTaskDetail = true
+                            }
+                    }
+                }
+            }
+            
+            // Load More Button
+            if hasMoreTasks && !isLoading {
+                loadMoreSection
+            }
+        }
+        .listStyle(PlainListStyle())
+        .refreshable {
+            await refreshTasks()
+        }
+    }
+    
+    // MARK: - Task Status Header
+    private var taskStatusHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(filteredTasks.count) of \(totalTaskCount) tasks")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                
+                if selectedTimeFilter != .all {
+                    Text(selectedTimeFilter.description)
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                }
+            }
+            
+            Spacer()
+            
+            if isLoadingMore {
+                HStack(spacing: 4) {
+                    ProgressView()
+                        .scaleEffect(0.6)
+                    Text("Loading...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 8)
+        .background(Color(.systemGray6))
+    }
+    
+    // MARK: - Load More Section
+    private var loadMoreSection: some View {
+        HStack {
+            Spacer()
+            Button(action: { Task { await loadMoreTasks() } }) {
+                HStack(spacing: 8) {
+                    if isLoadingMore {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                    } else {
+                        Image(systemName: "arrow.down.circle")
+                    }
+                    Text(isLoadingMore ? "Loading..." : "Load More Tasks")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                }
+                .foregroundColor(.blue)
+                .padding(.vertical, 12)
+            }
+            .disabled(isLoadingMore)
+            Spacer()
+        }
+        .listRowBackground(Color.clear)
+        .listRowSeparator(.hidden)
+    }
+    
+    // MARK: - Section Header
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundColor(.primary)
+            .textCase(nil)
     }
     
     // MARK: - Filter Section
@@ -140,6 +263,26 @@ struct TaskListView: View {
             // Filter Chips
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
+                    // Time Filter
+                    Menu {
+                        ForEach(TimeFilter.allCases, id: \.self) { timeFilter in
+                            Button(action: { selectedTimeFilter = timeFilter }) {
+                                HStack {
+                                    Text(timeFilter.displayName)
+                                    if selectedTimeFilter == timeFilter {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        FilterChip(
+                            title: selectedTimeFilter.displayName,
+                            isSelected: selectedTimeFilter != .recent,
+                            systemImage: "calendar"
+                        )
+                    }
+                    
                     // Status Filter
                     Menu {
                         ForEach(TaskStatusFilter.allCases, id: \.self) { status in
@@ -224,23 +367,87 @@ struct TaskListView: View {
     
     // MARK: - Helper Properties
     private var hasFiltersApplied: Bool {
-        !searchText.isEmpty || selectedChildFilter != nil || selectedStatusFilter != .all
+        !searchText.isEmpty || selectedChildFilter != nil || selectedStatusFilter != .all || selectedTimeFilter != .recent
+    }
+    
+    // MARK: - Date Grouping Helper
+    private func taskDateGroup(for date: Date) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        if calendar.isDateInToday(date) {
+            return "Today"
+        } else if calendar.isDateInYesterday(date) {
+            return "Yesterday"
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .weekOfYear) {
+            return "This Week"
+        } else if let lastWeek = calendar.date(byAdding: .weekOfYear, value: -1, to: now),
+                  calendar.isDate(date, equalTo: lastWeek, toGranularity: .weekOfYear) {
+            return "Last Week"
+        } else if calendar.isDate(date, equalTo: now, toGranularity: .month) {
+            return "This Month"
+        } else {
+            return "Earlier"
+        }
     }
     
     // MARK: - Actions
     private func loadTasks() async {
-        print("🔍 DEBUG: Loading tasks")
-        isLoading = true
+        print("🔍 DEBUG: Loading tasks - page: \(currentPage)")
+        if currentPage == 0 {
+            isLoading = true
+        } else {
+            isLoadingMore = true
+        }
+        
         do {
             guard let currentProfile = familyAuth.currentProfile else {
                 throw NSError(domain: "TaskListView", code: 1, userInfo: [NSLocalizedDescriptionKey: "No current profile"])
             }
-            allTasks = try await dataRepository.getTasksCreatedBy(userId: currentProfile.authUserId)
+            
+            let dateRange = selectedTimeFilter.dateRange
+            let newTasks = try await dataRepository.getTasksCreatedBy(
+                userId: currentProfile.authUserId,
+                fromDate: dateRange.from,
+                toDate: dateRange.to,
+                limit: pageSize,
+                offset: currentPage * pageSize
+            )
+            
+            // Get total count for the current filter
+            totalTaskCount = try await dataRepository.getTaskCountCreatedBy(
+                userId: currentProfile.authUserId,
+                fromDate: dateRange.from,
+                toDate: dateRange.to
+            )
+            
+            if currentPage == 0 {
+                allTasks = newTasks
+            } else {
+                allTasks.append(contentsOf: newTasks)
+            }
+            
+            hasMoreTasks = newTasks.count == pageSize && allTasks.count < totalTaskCount
             applyFilters()
+            
         } catch {
             errorMessage = error.localizedDescription
         }
+        
         isLoading = false
+        isLoadingMore = false
+    }
+    
+    private func loadMoreTasks() async {
+        guard hasMoreTasks && !isLoadingMore else { return }
+        currentPage += 1
+        await loadTasks()
+    }
+    
+    private func refreshTasks() async {
+        currentPage = 0
+        hasMoreTasks = true
+        await loadTasks()
     }
     
     private func applyFilters() {
@@ -278,6 +485,57 @@ struct TaskListView: View {
         searchText = ""
         selectedChildFilter = nil
         selectedStatusFilter = .all
+        selectedTimeFilter = .recent
+    }
+}
+
+// MARK: - Time Filter
+enum TimeFilter: CaseIterable {
+    case recent, thisWeek, thisMonth, last3Months, thisYear, all
+    
+    var displayName: String {
+        switch self {
+        case .recent: return "Recent"
+        case .thisWeek: return "This Week"
+        case .thisMonth: return "This Month"
+        case .last3Months: return "Last 3 Months"
+        case .thisYear: return "This Year"
+        case .all: return "All Time"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .recent: return "Last 30 days"
+        case .thisWeek: return "This week"
+        case .thisMonth: return "This month"
+        case .last3Months: return "Last 3 months"
+        case .thisYear: return "This year"
+        case .all: return "All tasks"
+        }
+    }
+    
+    var dateRange: (from: Date?, to: Date?) {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        switch self {
+        case .recent:
+            return (calendar.date(byAdding: .day, value: -30, to: now), now)
+        case .thisWeek:
+            let startOfWeek = calendar.dateInterval(of: .weekOfYear, for: now)?.start
+            return (startOfWeek, now)
+        case .thisMonth:
+            let startOfMonth = calendar.dateInterval(of: .month, for: now)?.start
+            return (startOfMonth, now)
+        case .last3Months:
+            return (calendar.date(byAdding: .month, value: -3, to: now), now)
+        case .thisYear:
+            let startOfYear = calendar.dateInterval(of: .year, for: now)?.start
+            return (startOfYear, now)
+        case .all:
+            return (nil, nil)
+        }
     }
 }
 
