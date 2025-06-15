@@ -10,47 +10,48 @@ struct ProfileSelectionView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background
+                // Enhanced Background
                 LinearGradient(
-                    colors: [Color.blue.opacity(0.05), Color.purple.opacity(0.05)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
+                    colors: [Color.indigo.opacity(0.2), Color.cyan.opacity(0.2)],
+                    startPoint: .top,
+                    endPoint: .bottom
                 )
                 .ignoresSafeArea()
                 
-                VStack(spacing: 24) {
+                VStack(spacing: 32) {
                     // Header
-                    VStack(spacing: 12) {
-                        Image(systemName: "person.2.circle.fill")
-                            .font(.system(size: 48))
-                            .foregroundStyle(.blue.gradient)
+                    VStack(spacing: 8) {
+                        Image(systemName: "person.3.sequence.fill")
+                            .font(.system(size: 52))
+                            .foregroundStyle(.indigo.gradient)
                         
-                        Text("Choose Profile")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
+                        Text("Select Your Profile")
+                            .font(.system(size: 32, weight: .bold, design: .rounded))
                         
-                        Text("Select which family member is using the device")
+                        Text("Choose who is using the device to continue")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 30)
                     
                     // Profiles Grid
                     ScrollView {
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: 16) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
                             ForEach(familyAuth.availableProfiles) { profile in
-                                ProfileCard(
-                                    profile: profile,
-                                    isSelected: false
-                                ) {
+                                ProfileCard(profile: profile) {
                                     selectProfile(profile)
-                                } onSettings: {
-                                    selectedProfileForSettings = profile
-                                    showingProfileSettings = true
+                                }
+                                .contextMenu {
+                                    if profile.isParent {
+                                        Button {
+                                            selectedProfileForSettings = profile
+                                            showingProfileSettings = true
+                                        } label: {
+                                            Label("Profile Settings", systemImage: "gearshape")
+                                        }
+                                    }
                                 }
                             }
                             
@@ -91,26 +92,36 @@ struct ProfileSelectionView: View {
     // MARK: - Profile Card
     struct ProfileCard: View {
         let profile: FamilyProfile
-        let isSelected: Bool
         let onTap: () -> Void
-        let onSettings: () -> Void
         
         var body: some View {
             Button(action: onTap) {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     // Profile Avatar
-                    ZStack {
+                    ZStack(alignment: .bottomTrailing) {
                         Circle()
-                            .fill(profile.isParent ? Color.blue.gradient : Color.green.gradient)
-                            .frame(width: 60, height: 60)
+                            .fill(profile.isParent ? Color.indigo.gradient : Color.teal.gradient)
+                            .frame(width: 80, height: 80)
+                            .shadow(color: .black.opacity(0.1), radius: 5, y: 3)
                         
                         Image(systemName: profile.isParent ? "person.fill.checkmark" : "person.fill")
-                            .font(.system(size: 24, weight: .medium))
+                            .font(.system(size: 36, weight: .medium))
                             .foregroundColor(.white)
+                            .offset(y: profile.isParent ? 0 : 5)
+                        
+                        if profile.isParent {
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundStyle(.white, .indigo)
+                                .background(Circle().fill(.white).padding(2))
+                                .offset(x: 4, y: 4)
+                                .transition(.scale)
+                                .accessibilityLabel("Long press for settings")
+                        }
                     }
                     
                     // Profile Info
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Text(profile.name)
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -120,29 +131,17 @@ struct ProfileSelectionView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
-                    // Settings Button for Parents
-                    if profile.isParent {
-                        Button(action: onSettings) {
-                            Image(systemName: "gearshape.fill")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                        }
-                        .padding(.top, 4)
-                    }
                 }
-                .padding(.vertical, 20)
+                .padding(.vertical, 24)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 .background {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 24)
                         .fill(.regularMaterial)
-                        .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                        .stroke(.secondary.opacity(0.2), lineWidth: 1)
                 }
             }
-            .buttonStyle(.plain)
-            .scaleEffect(isSelected ? 0.95 : 1.0)
-            .animation(.bouncy(duration: 0.2), value: isSelected)
+            .buttonStyle(CardButtonStyle())
         }
     }
     
@@ -152,60 +151,53 @@ struct ProfileSelectionView: View {
         
         var body: some View {
             Button(action: onTap) {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     ZStack {
                         Circle()
-                            .fill(.gray.opacity(0.2))
-                            .frame(width: 60, height: 60)
+                            .fill(Color.gray.opacity(0.1))
+                            .frame(width: 80, height: 80)
                         
                         Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.blue)
+                            .font(.system(size: 32, weight: .medium))
+                            .foregroundColor(.accentColor)
                     }
                     
-                    VStack(spacing: 4) {
+                    VStack(spacing: 2) {
                         Text("Add Child")
                             .font(.headline)
                             .fontWeight(.semibold)
+                            .foregroundColor(.primary)
                         
-                        Text("New Profile")
+                        Text("Create a new profile")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
-                .padding(.vertical, 20)
+                .padding(.vertical, 24)
                 .padding(.horizontal, 16)
                 .frame(maxWidth: .infinity)
                 .background {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: 24)
                         .fill(.regularMaterial)
-                        .stroke(.blue.opacity(0.5), lineWidth: 1.5)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [8, 4]))
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 3]))
+                        .foregroundColor(.secondary.opacity(0.5))
                 }
             }
-            .buttonStyle(.plain)
+            .buttonStyle(CardButtonStyle())
         }
     }
     
     // MARK: - Sign Out Button
     private var signOutButton: some View {
         Button(action: signOut) {
-            HStack {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 16, weight: .medium))
-                
-                Text("Sign Out")
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-            }
-            .foregroundColor(.red)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.red.opacity(0.1))
-                    .stroke(.red.opacity(0.3), lineWidth: 1)
-            }
+            Label("Sign Out of Family", systemImage: "rectangle.portrait.and.arrow.right")
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundColor(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule().fill(.regularMaterial)
+                )
         }
         .padding(.bottom, 20)
     }
@@ -344,9 +336,15 @@ struct ProfileSettingsSheet: View {
     let onDismiss: () -> Void
     
     @EnvironmentObject private var familyAuth: FamilyAuthService
-    @State private var editingName = ""
+    @State private var editingName: String
     @State private var isEditing = false
     @State private var showingDeleteConfirmation = false
+    
+    init(profile: FamilyProfile, onDismiss: @escaping () -> Void) {
+        self.profile = profile
+        self.onDismiss = onDismiss
+        self._editingName = State(initialValue: profile.name)
+    }
     
     var body: some View {
         NavigationView {
@@ -364,14 +362,24 @@ struct ProfileSettingsSheet: View {
                     }
                     
                     if isEditing {
-                        TextField("Profile Name", text: $editingName)
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .multilineTextAlignment(.center)
-                            .textFieldStyle(.roundedBorder)
-                            .padding(.horizontal, 40)
+                        HStack(spacing: 8) {
+                            TextField("Profile Name", text: $editingName)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .multilineTextAlignment(.center)
+                                .textFieldStyle(.roundedBorder)
+                                .padding(.leading, 32)
+                            
+                            Button(action: cancelEditing) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.secondary, .quaternary)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        
                     } else {
-                        Text(profile.name)
+                        Text(editingName)
                             .font(.title2)
                             .fontWeight(.bold)
                     }
@@ -380,22 +388,19 @@ struct ProfileSettingsSheet: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
-                .padding(.top, 20)
+                .padding(.top, 30)
                 
                 // Settings Options
                 VStack(spacing: 16) {
-                    ProfileSettingsRow(
-                        icon: "pencil",
-                        title: "Edit Name",
-                        color: .blue
-                    ) {
-                        if isEditing {
-                            saveNameEdit()
-                        } else {
+                    if !isEditing {
+                        ProfileSettingsRow(
+                            icon: "pencil",
+                            title: "Edit Name",
+                            color: .blue
+                        ) {
                             startEditing()
                         }
                     }
-                    .opacity(isEditing ? 0.5 : 1.0)
                     
                     if !profile.isParent {
                         ProfileSettingsRow(
@@ -405,28 +410,33 @@ struct ProfileSettingsSheet: View {
                         ) {
                             showingDeleteConfirmation = true
                         }
+                        .disabled(isEditing)
+                        .opacity(isEditing ? 0.5 : 1.0)
                     }
                 }
                 .padding(.horizontal, 20)
                 
                 Spacer()
                 
-                // Done Button
-                Button("Done") {
+                // Action Button
+                Button(action: {
                     if isEditing {
                         saveNameEdit()
                     } else {
                         onDismiss()
                     }
+                }) {
+                    Text(isEditing ? "Save Changes" : "Done")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background {
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(isEditing ? Color.green.gradient : Color.blue.gradient)
+                        }
                 }
-                .font(.headline)
                 .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(.blue.gradient)
-                }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
@@ -444,21 +454,25 @@ struct ProfileSettingsSheet: View {
         } message: {
             Text("This action cannot be undone.")
         }
-        .onAppear {
-            editingName = profile.name
-        }
     }
     
     private func startEditing() {
-        editingName = profile.name
         isEditing = true
+    }
+    
+    private func cancelEditing() {
+        editingName = profile.name
+        isEditing = false
     }
     
     private func saveNameEdit() {
         Task {
             do {
-                try await familyAuth.updateProfile(profile, newName: editingName)
-                isEditing = false
+                let trimmedName = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedName.isEmpty {
+                    try await familyAuth.updateProfile(profile, newName: trimmedName)
+                    onDismiss()
+                }
             } catch {
                 print("Failed to update profile: \(error)")
             }
@@ -511,6 +525,15 @@ struct ProfileSettingsRow: View {
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Custom Button Style
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.bouncy(duration: 0.3), value: configuration.isPressed)
     }
 }
 
